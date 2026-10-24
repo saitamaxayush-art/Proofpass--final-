@@ -14,3 +14,6 @@ __pycache__/
 .venv/
 env/
 passport_payload.json
+
+# Local ProofPass database
+proofpass.db

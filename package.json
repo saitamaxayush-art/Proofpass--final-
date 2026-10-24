@@ -6,6 +6,8 @@
     "dev": "npm --prefix frontend run dev",
     "build": "npm --prefix frontend run build",
     "preview": "npm --prefix frontend run preview",
-    "backend": "python backend/server.py"
+    "backend": "python backend/server.py",
+    "demo": "python3 rundemo.py",
+    "test:backend": "pytest"
   }
 }
