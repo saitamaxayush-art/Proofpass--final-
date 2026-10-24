@@ -20,7 +20,7 @@ export function buildIntakeFormData(intakeData) {
     formData.append('resume_text', intakeData.resumeText)
   }
 
-  formData.append('github_url', intakeData.githubUrl || '')
+  // github_url removed from POST /verify: verified session identity is used exclusively
   formData.append('target_role', intakeData.targetRole || '')
 
   if (intakeData.jobDescription) {
@@ -78,12 +78,13 @@ export async function submitIntake(intakeData, { mock = false } = {}) {
 
   const formData = buildIntakeFormData(intakeData)
   const endpoint = intakeData.resumeFile
-    ? '/api/v1/analyze/upload'
-    : '/api/v1/analyze'
+    ? '/api/v1/verify/upload'
+    : '/api/v1/verify'
 
   const res = await fetch(endpoint, {
     method: 'POST',
     body: formData,
+    credentials: 'include',
   })
 
   if (!res.ok) {

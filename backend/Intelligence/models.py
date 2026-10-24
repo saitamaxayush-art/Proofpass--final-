@@ -159,6 +159,8 @@ class PassportPayload(BaseModel):
     signature: Optional[str] = None
     public_key_id: Optional[str] = None
     generated_at: str = Field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
+    github_id: Optional[int] = None
+    github_login: Optional[str] = None
 
 # --- Quiz Models ---
 class QuizQuestion(BaseModel):

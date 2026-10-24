@@ -63,6 +63,28 @@ export async function addApplicantToRole(roleId, candidateData) {
   await new Promise((res) => setTimeout(res, 50))
   const all = loadStoredApplicants()
 
+  const cleanEmail = (candidateData.email || '').trim().toLowerCase()
+  const existingIdx = all.findIndex(
+    (a) => a.roleId === roleId && (a.email || '').trim().toLowerCase() === cleanEmail
+  )
+
+  if (existingIdx !== -1) {
+    const existing = all[existingIdx]
+    const updated = {
+      ...existing,
+      ...candidateData,
+      name: candidateData.name ? candidateData.name.trim() : existing.name,
+      email: candidateData.email ? candidateData.email.trim() : existing.email,
+      hasPassport: candidateData.hasPassport !== undefined ? Boolean(candidateData.hasPassport) : existing.hasPassport,
+      passport: candidateData.passport !== undefined ? candidateData.passport : existing.passport,
+      skills: candidateData.skills !== undefined ? candidateData.skills : existing.skills,
+      updatedAt: new Date().toISOString(),
+    }
+    all[existingIdx] = updated
+    saveStoredApplicants(all)
+    return updated
+  }
+
   const newApplicant = {
     id: `cand_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`,
     roleId,
@@ -72,6 +94,7 @@ export async function addApplicantToRole(roleId, candidateData) {
     resumeText: candidateData.resumeText || '',
     githubUrl: candidateData.githubUrl || '',
     leetcodeUrl: candidateData.leetcodeUrl || '',
+    codeforcesUrl: candidateData.codeforcesUrl || '',
     certificateUrls: candidateData.certificateUrls || '',
     targetRole: candidateData.targetRole || 'Software Engineer',
     skills: candidateData.skills || [],
@@ -83,6 +106,70 @@ export async function addApplicantToRole(roleId, candidateData) {
   all.push(newApplicant)
   saveStoredApplicants(all)
   return newApplicant
+}
+
+/**
+ * Atomically batch-ingest or update candidate applications for a role.
+ * Prevents race conditions and saves to storage in a single transaction.
+ *
+ * @param {string} roleId
+ * @param {Array<Object>} candidatesList
+ * @returns {Promise<Array<Object>>}
+ */
+export async function addApplicantsBatchToRole(roleId, candidatesList) {
+  await new Promise((res) => setTimeout(res, 20))
+  const all = loadStoredApplicants()
+  const results = []
+
+  for (const candidateData of candidatesList) {
+    const cleanEmail = (candidateData.email || '').trim().toLowerCase()
+    const existingIdx = all.findIndex(
+      (a) => a.roleId === roleId && (a.email || '').trim().toLowerCase() === cleanEmail
+    )
+
+    if (existingIdx !== -1) {
+      const existing = all[existingIdx]
+      const updated = {
+        ...existing,
+        ...candidateData,
+        name: candidateData.name ? candidateData.name.trim() : existing.name,
+        email: candidateData.email ? candidateData.email.trim() : existing.email,
+        githubUrl: candidateData.githubUrl !== undefined ? candidateData.githubUrl : existing.githubUrl,
+        leetcodeUrl: candidateData.leetcodeUrl !== undefined ? candidateData.leetcodeUrl : existing.leetcodeUrl,
+        codeforcesUrl: candidateData.codeforcesUrl !== undefined ? candidateData.codeforcesUrl : existing.codeforcesUrl,
+        certificateUrls: candidateData.certificateUrls !== undefined ? candidateData.certificateUrls : existing.certificateUrls,
+        hasPassport: candidateData.hasPassport !== undefined ? Boolean(candidateData.hasPassport) : existing.hasPassport,
+        passport: candidateData.passport !== undefined ? candidateData.passport : existing.passport,
+        skills: candidateData.skills !== undefined ? candidateData.skills : (existing.skills || []),
+        updatedAt: new Date().toISOString(),
+      }
+      all[existingIdx] = updated
+      results.push(updated)
+    } else {
+      const newApplicant = {
+        id: `cand_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`,
+        roleId,
+        name: (candidateData.name || '').trim(),
+        email: (candidateData.email || '').trim(),
+        hasPassport: Boolean(candidateData.hasPassport),
+        resumeText: candidateData.resumeText || '',
+        githubUrl: candidateData.githubUrl || '',
+        leetcodeUrl: candidateData.leetcodeUrl || '',
+        codeforcesUrl: candidateData.codeforcesUrl || '',
+        certificateUrls: candidateData.certificateUrls || '',
+        targetRole: candidateData.targetRole || 'Software Engineer',
+        skills: candidateData.skills || [],
+        passport: candidateData.passport || null,
+        isRecruiterGenerated: Boolean(candidateData.isRecruiterGenerated),
+        createdAt: new Date().toISOString(),
+      }
+      all.push(newApplicant)
+      results.push(newApplicant)
+    }
+  }
+
+  saveStoredApplicants(all)
+  return results
 }
 
 /**

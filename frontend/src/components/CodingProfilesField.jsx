@@ -92,7 +92,11 @@ function revalidateAllRows(rows) {
   })
 }
 
-export function CodingProfilesField({ value, onChange }) {
+export function CodingProfilesField({
+  value,
+  onChange,
+  label = '3. Coding Profiles (Optional)',
+}) {
   const counterRef = useRef(1)
   const [rows, setRows] = useState(() => {
     if (Array.isArray(value) && value.length > 0) {
@@ -287,7 +291,7 @@ export function CodingProfilesField({ value, onChange }) {
               ref={(el) => (rowRefs.current[index] = el)}
             >
               <label className="form-label" htmlFor={inputId}>
-                {index === 0 ? 'Coding profile link' : `Coding profile link ${rowNumber}`}
+                {index === 0 ? label : `Coding profile link ${rowNumber}`}
               </label>
 
               <div className="coding-profile-input-wrap">

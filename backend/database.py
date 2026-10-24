@@ -8,7 +8,7 @@ import os
 from datetime import datetime
 from typing import Generator
 
-from sqlalchemy import Boolean, Column, DateTime, Float, String, Text, create_engine
+from sqlalchemy import Boolean, Column, DateTime, Float, Integer, String, Text, create_engine
 from sqlalchemy.orm import declarative_base, sessionmaker, Session
 
 DATABASE_URL = os.getenv("DATABASE_URL", "sqlite:///./proofpass.db")
@@ -40,6 +40,7 @@ class PassportRecord(Base):
     quiz_questions_json = Column(Text, nullable=False)
     quiz_history_json = Column(Text, nullable=False, default="{}")
     is_demo = Column(Boolean, nullable=False, default=False)
+    github_id = Column(Integer, nullable=True, index=True)
     created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False)
 
@@ -57,3 +58,10 @@ def init_db(target_engine=None) -> None:
     """Creates database tables if they do not exist."""
     eng = target_engine or engine
     Base.metadata.create_all(bind=eng)
+    try:
+        from sqlalchemy import text
+        with eng.connect() as conn:
+            conn.execute(text("ALTER TABLE passports ADD COLUMN github_id INTEGER"))
+            conn.commit()
+    except Exception:
+        pass

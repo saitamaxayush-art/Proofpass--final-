@@ -71,7 +71,7 @@ export async function executeStep4Authorship(evidenceData, readData, onLog = () 
     authorshipData.push({
       skill: item.skill,
       source: 'github',
-      ceiling: 80,
+      ceiling: 100,
       filePath: item.filePath,
       lineShare,
       commitCount,
@@ -79,6 +79,7 @@ export async function executeStep4Authorship(evidenceData, readData, onLog = () 
       usageDepth,
       isOriginalAuthor,
       forkedTutorial: false,
+      confirmedInStep3: true,
     })
 
     onLog(`[Authorship] ${item.skill}: ${lineShare}% candidate line share, ${commitCount} commits across ${filesTouched} files.`)

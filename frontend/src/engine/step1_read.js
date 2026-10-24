@@ -97,21 +97,20 @@ export async function executeStep1Read(intakeData, onLog = () => {}) {
     }
   }
 
-  // If skills were not extracted by backend, match against dictionary
-  if (claimedSkills.length === 0) {
-    const textUpper = rawResumeText.toUpperCase()
-    claimedSkills = TECHNICAL_SKILLS_DICTIONARY.filter((skill) => {
-      if (skill === 'C++') {
-        return /(?:\bcpp\b|\bc\+\+(?=[,\s\/\)\.;]|$))/i.test(rawResumeText)
-      }
-      if (skill === 'C') {
-        return /(?:\bc\s*[\/]\s*c\+\+|\bc\s+(?:programming|language)\b|\bansi\s+c\b|(?<=[,\s\(\/\:;])c(?=[,\s\/\)\.;]|$)(?!\+\+|#))/i.test(rawResumeText)
-      }
-      const skillUpper = skill.toUpperCase()
-      const regex = new RegExp(`\\b${skillUpper.replace(/[.*+?^${}()|[\\]\\]/g, '\\$&')}\\b`, 'i')
-      return regex.test(textUpper)
-    })
-  }
+  // Match against client-side technical skills dictionary and merge
+  const textUpper = rawResumeText.toUpperCase()
+  const localSkills = TECHNICAL_SKILLS_DICTIONARY.filter((skill) => {
+    if (skill === 'C++') {
+      return /(?:\bcpp\b|\bc\+\+(?=[,\s\/\)\.;]|$))/i.test(rawResumeText)
+    }
+    if (skill === 'C') {
+      return /(?:\bc\s*[\/]\s*c\+\+|\bc\s+(?:programming|language)\b|\bansi\s+c\b|(?<=[,\s\(\/\:;])c(?=[,\s\/\)\.;]|$)(?!\+\+|#))/i.test(rawResumeText)
+    }
+    const skillUpper = skill.toUpperCase()
+    const regex = new RegExp(`\\b${skillUpper.replace(/[.*+?^${}()|[\\]\\]/g, '\\$&')}\\b`, 'i')
+    return regex.test(textUpper)
+  })
+  claimedSkills = Array.from(new Set([...claimedSkills, ...localSkills]))
 
   // Ensure baseline core skills for demonstration if still zero
   if (claimedSkills.length === 0) {

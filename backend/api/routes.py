@@ -28,6 +28,7 @@ try:
         evaluate_quiz_submission,
         run_analyze_pipeline,
         verify_passport_integrity,
+        _seal_passport,
     )
     from backend.Intelligence.models import PassportPayload, QuizQuestion
 except ImportError:
@@ -47,10 +48,27 @@ except ImportError:
         evaluate_quiz_submission,
         run_analyze_pipeline,
         verify_passport_integrity,
+        _seal_passport,
     )
     from Intelligence.models import PassportPayload, QuizQuestion
 
+try:
+    from backend.api.auth import auth_router, get_current_session
+    from backend.verification.github_client import parse_github_url
+    from backend.schemas import canonical_json_dumps
+except ImportError:
+    from api.auth import auth_router, get_current_session
+    from verification.github_client import parse_github_url
+    from schemas import canonical_json_dumps
+
+try:
+    from backend.api.batch import batch_router
+except ImportError:
+    from api.batch import batch_router
+
 router = APIRouter(prefix="/api/v1", tags=["ProofPass Core"])
+router.include_router(auth_router)
+router.include_router(batch_router)
 
 
 @router.get("/health", response_model=HealthResponse)
@@ -311,6 +329,176 @@ async def analyze_upload(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Pipeline execution error: {exc}",
         )
+
+    return AnalyzeResponse(
+        passport_id=record.passport_id,
+        status=record.status,
+        role_match_score=record.role_match_score,
+        target_role=record.target_role,
+        sha256_hash=record.sha256_hash,
+        is_demo=record.is_demo,
+        passport=passport,
+        created_at=record.created_at.isoformat(),
+    )
+
+
+@router.post(
+    "/verify",
+    response_model=AnalyzeResponse,
+    summary="Verify Candidate Skills with Authenticated GitHub Session",
+    description=(
+        "Verifies candidate skill claims against public GitHub repositories owned by "
+        "the authenticated GitHub session. Client-supplied github_url is ignored, "
+        "repos not owned by the session login are rejected, and ownership_verified is set."
+    ),
+)
+@router.post("/verify/upload", response_model=AnalyzeResponse, include_in_schema=False)
+async def verify_candidate(
+    request: Request,
+    db: Session = Depends(get_db),
+):
+    """
+    Candidate verification endpoint.
+    Requires an active GitHub OAuth session cookie.
+    Ignores client-supplied github_url, rejects repos not owned by authenticated login,
+    sets ownership_verified=True on repo evidence, and puts github_id into passport.
+    """
+    session = get_current_session(request)
+    if not session:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Authentication required. Please connect your GitHub account to verify.",
+        )
+
+    github_login = session["github_login"]
+    github_id = session["github_id"]
+
+    content_type = request.headers.get("content-type", "")
+    resume_text: Optional[str] = None
+    resume_bytes: Optional[bytes] = None
+    client_supplied_github_url: str = ""
+    target_role: str = ""
+    job_description: Optional[str] = None
+    consent: bool = False
+    allow_network: bool = True
+
+    try:
+        if "multipart/form-data" in content_type:
+            form = await request.form()
+            file_field = form.get("resume_file") or form.get("resumeFile")
+            if file_field and hasattr(file_field, "read"):
+                resume_bytes = await file_field.read()
+            raw_text = form.get("resume_text") or form.get("resumeText")
+            if raw_text:
+                resume_text = str(raw_text)
+
+            client_supplied_github_url = str(
+                form.get("github_url") or form.get("githubUrl") or ""
+            ).strip()
+            target_role = str(form.get("target_role") or form.get("targetRole") or "").strip()
+            jd_raw = form.get("job_description") or form.get("jobDescription")
+            job_description = str(jd_raw) if jd_raw else None
+
+            consent_raw = (
+                form.get("consent")
+                or form.get("consentAi")
+                or form.get("consent_ai")
+                or form.get("candidate_consent")
+            )
+            consent = str(consent_raw).lower() in ("true", "1", "yes")
+
+            allow_net_raw = form.get("allow_network") or form.get("allowNetwork")
+            if allow_net_raw is not None:
+                allow_network = str(allow_net_raw).lower() in ("true", "1", "yes")
+        else:
+            body = await request.json()
+            resume_text = body.get("resume_text") or body.get("resumeText")
+            client_supplied_github_url = str(
+                body.get("github_url") or body.get("githubUrl") or ""
+            ).strip()
+            target_role = str(body.get("target_role") or body.get("targetRole") or "").strip()
+            job_description = body.get("job_description") or body.get("jobDescription")
+            consent = bool(body.get("consent") or body.get("consentAi"))
+            allow_network = body.get("allow_network", True)
+    except Exception as exc:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail=f"Invalid request data: {exc}",
+        )
+
+    if not consent:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Candidate consent is required to process resume and evidence data.",
+        )
+
+    if not target_role:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="A target role is required.",
+        )
+
+    if not resume_bytes and (not resume_text or not resume_text.strip()):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="A resume is required. Please provide resume text or upload a PDF document.",
+        )
+
+    # Reject repos not owned by authenticated login with a clear error
+    if client_supplied_github_url:
+        try:
+            owner, repo_name = parse_github_url(client_supplied_github_url)
+            if owner.lower() != github_login.lower():
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail=f"Repository '{client_supplied_github_url}' is not owned by authenticated user @{github_login}.",
+                )
+        except ValueError:
+            pass
+
+    # Ignore client-supplied github_url and build repo URL from session login
+    session_github_url = f"https://github.com/{github_login}"
+
+    try:
+        passport, record = run_analyze_pipeline(
+            resume_text=resume_text,
+            resume_bytes=resume_bytes,
+            github_url=session_github_url,
+            target_role=target_role,
+            job_description=job_description,
+            candidate_consent=consent,
+            allow_network=allow_network,
+            db=db,
+        )
+    except ValueError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=str(exc),
+        )
+    except Exception as exc:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Pipeline execution error: {exc}",
+        )
+
+    # Set ownership_verified = True for GitHub evidence derived from this session
+    for skill in passport.skills:
+        for ev in skill.evidence_chain:
+            if ev.source == "repo":
+                ev.ownership_verified = True
+
+    # Put github_id and github_login in passport so a rename does not break the link
+    passport.github_id = github_id
+    passport.github_login = github_login
+
+    # Re-seal the passport so that github_id and ownership_verified are sealed cryptographically
+    sha256_hash, final_payload = _seal_passport(passport)
+    record.sha256_hash = sha256_hash
+    record.payload_json = canonical_json_dumps(final_payload)
+    if hasattr(record, "github_id"):
+        record.github_id = github_id
+    if db:
+        db.commit()
 
     return AnalyzeResponse(
         passport_id=record.passport_id,

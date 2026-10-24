@@ -177,3 +177,38 @@ export async function getSession() {
     return null
   }
 }
+
+/**
+ * Retrieve verified GitHub OAuth profile from active backend session.
+ *
+ * @returns {Promise<{ github_login: string, github_id: number, avatar_url?: string } | null>}
+ */
+export async function getGitHubSession() {
+  try {
+    const res = await fetch('/api/v1/auth/me', {
+      method: 'GET',
+      credentials: 'include',
+    })
+    if (!res.ok) return null
+    return await res.json()
+  } catch {
+    return null
+  }
+}
+
+/**
+ * Terminate active GitHub OAuth session.
+ *
+ * @returns {Promise<boolean>}
+ */
+export async function logoutGitHubSession() {
+  try {
+    const res = await fetch('/api/v1/auth/logout', {
+      method: 'POST',
+      credentials: 'include',
+    })
+    return res.ok
+  } catch {
+    return false
+  }
+}
