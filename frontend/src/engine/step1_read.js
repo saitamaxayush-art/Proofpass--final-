@@ -3,9 +3,33 @@ import JSZip from 'jszip'
 const TECHNICAL_SKILLS_DICTIONARY = [
   'React', 'TypeScript', 'JavaScript', 'Node.js', 'REST APIs', 'PostgreSQL',
   'Docker', 'Testing', 'Git workflow', 'Kubernetes', 'System design', 'Rust',
-  'GraphQL', 'Redis', 'Python', 'Go', 'AWS', 'Next.js', 'SQL', 'CI/CD',
-  'FastAPI', 'Django', 'Flask', 'Java', 'C++', 'MongoDB', 'MySQL', 'Tailwind',
+  'GraphQL', 'Redis', 'Python', 'Go', 'AWS', 'Next.js', 'SQL', 'SQLite', 'CI/CD',
+  'FastAPI', 'Django', 'Flask', 'Java', 'C++', 'C', 'MongoDB', 'MySQL', 'Tailwind',
   'Linux', 'Microservices', 'HTML/CSS', 'Vue', 'Angular', 'Express', 'Spring'
+]
+
+const IGNORED_DIR_PATTERNS = [
+  'node_modules/',
+  '.git/',
+  '__pycache__/',
+  '.venv/',
+  'venv/',
+  'dist/',
+  'build/',
+  '.next/',
+  '.cache/',
+  '.idea/',
+  '.vscode/',
+]
+
+const IGNORED_FILE_EXTENSIONS = [
+  '.pyc', '.pyo', '.pyd', '.class', '.dll', '.exe', '.so', '.dylib',
+  '.o', '.obj', '.bin', '.iso', '.dmg',
+  '.png', '.jpg', '.jpeg', '.gif', '.ico', '.svg', '.webp',
+  '.mp4', '.mp3', '.wav', '.mov', '.avi',
+  '.zip', '.tar', '.gz', '.7z', '.rar',
+  '.woff', '.woff2', '.ttf', '.eot',
+  '.pdf', '.docx', '.doc', '.xlsx', '.xls'
 ]
 
 export async function executeStep1Read(intakeData, onLog = () => {}) {
@@ -77,6 +101,12 @@ export async function executeStep1Read(intakeData, onLog = () => {}) {
   if (claimedSkills.length === 0) {
     const textUpper = rawResumeText.toUpperCase()
     claimedSkills = TECHNICAL_SKILLS_DICTIONARY.filter((skill) => {
+      if (skill === 'C++') {
+        return /(?:\bcpp\b|\bc\+\+(?=[,\s\/\)\.;]|$))/i.test(rawResumeText)
+      }
+      if (skill === 'C') {
+        return /(?:\bc\s*[\/]\s*c\+\+|\bc\s+(?:programming|language)\b|\bansi\s+c\b|(?<=[,\s\(\/\:;])c(?=[,\s\/\)\.;]|$)(?!\+\+|#))/i.test(rawResumeText)
+      }
       const skillUpper = skill.toUpperCase()
       const regex = new RegExp(`\\b${skillUpper.replace(/[.*+?^${}()|[\\]\\]/g, '\\$&')}\\b`, 'i')
       return regex.test(textUpper)
@@ -101,13 +131,25 @@ export async function executeStep1Read(intakeData, onLog = () => {}) {
     onLog(`Unpacking project ZIP archive: ${intakeData.zipFile.name}...`)
     try {
       const zip = await JSZip.loadAsync(intakeData.zipFile)
-      const fileNames = Object.keys(zip.files).filter((fn) => !zip.files[fn].dir && !fn.includes('node_modules/') && !fn.includes('.git/'))
+      const fileNames = Object.keys(zip.files).filter((fn) => {
+        if (zip.files[fn].dir) return false
+        const lower = fn.toLowerCase()
+        if (IGNORED_DIR_PATTERNS.some((p) => lower.includes(p))) return false
+        if (IGNORED_FILE_EXTENSIONS.some((ext) => lower.endsWith(ext))) return false
+        return true
+      })
       
       let inspectedCount = 0
       for (const fn of fileNames) {
         try {
-          const content = await zip.files[fn].async('text')
-          const lineCount = content.split('\n').length
+          const isDb = fn.endsWith('.sqlite3') || fn.endsWith('.db') || fn.endsWith('.sqlite')
+          let content = ''
+          if (isDb) {
+            content = 'SQLite Database Binary Manifest'
+          } else {
+            content = await zip.files[fn].async('text')
+          }
+          const lineCount = isDb ? 50 : Math.max(1, content.split('\n').length)
           totalLinesRead += lineCount
           filesIndex[fn] = {
             path: fn,
@@ -117,7 +159,7 @@ export async function executeStep1Read(intakeData, onLog = () => {}) {
           }
           inspectedCount++
         } catch {
-          // Binary file skipped
+          // Unreadable file skipped
         }
       }
 
@@ -127,26 +169,37 @@ export async function executeStep1Read(intakeData, onLog = () => {}) {
         lines: totalLinesRead,
         source: 'ZIP archive upload',
       })
-      onLog(`ZIP uncompressed: ${inspectedCount} source files, ${totalLinesRead.toLocaleString()} lines of code indexed.`)
+      onLog(`ZIP uncompressed: ${inspectedCount} source files, ${totalLinesRead.toLocaleString()} lines of code indexed (cache and binary bytecode excluded).`)
     } catch (e) {
       onLog(`Warning: Unable to unzip archive directly (${e.message}). Falling back to repository index.`)
       fetchError = `ZIP read failure: ${e.message}`
     }
   }
 
-  if (intakeData.githubUrl && repositories.length === 0) {
+  if (intakeData.githubUrl) {
     const url = intakeData.githubUrl.trim()
     const username = url.replace(/https?:\/\/(www\.)?github\.com\//i, '').replace(/\/.*$/, '').trim()
     onLog(`Connecting to GitHub REST API for profile: @${username}...`)
 
-    const token = (typeof import.meta !== 'undefined' && import.meta?.env?.VITE_GITHUB_TOKEN) || (typeof process !== 'undefined' && process.env?.VITE_GITHUB_TOKEN)
-    const headers = token ? { Authorization: `token ${token}` } : {}
+    const token = (typeof import.meta !== 'undefined' && import.meta.env ? import.meta.env.VITE_GITHUB_TOKEN : '') || (typeof process !== 'undefined' && process.env ? process.env.VITE_GITHUB_TOKEN : '')
+    const cleanToken = token ? token.trim().replace(/^['"]|['"]$/g, '') : null
+
+    if (cleanToken) {
+      onLog('Authenticated via GitHub Personal Access Token (5,000 req/hr quota active).')
+    } else {
+      onLog('Warning: No GitHub token detected; requests will be capped at the 60 req/hr unauthenticated limit.')
+    }
+
+    const headers = {
+      Accept: 'application/vnd.github.v3+json',
+      ...(cleanToken ? { Authorization: `Bearer ${cleanToken.replace(/^Bearer /i, '').replace(/^token /i, '')}` } : {})
+    }
 
     try {
-      const res = await fetch(`https://api.github.com/users/${username}/repos?per_page=10&sort=updated`, { headers })
+      const res = await fetch(`https://api.github.com/users/${username}/repos?per_page=100&sort=updated`, { headers })
       if (res.ok) {
         const repoData = await res.json()
-        repositories = repoData.map((r) => ({
+        const ghRepos = repoData.map((r) => ({
           name: r.name,
           description: r.description || 'No description provided',
           language: r.language || 'Unknown',
@@ -154,43 +207,37 @@ export async function executeStep1Read(intakeData, onLog = () => {}) {
           stars: r.stargazers_count,
           url: r.html_url,
           source: 'GitHub API (live)',
+          default_branch: r.default_branch || 'main',
         }))
-        onLog(`GitHub API success: retrieved ${repositories.length} public repositories for @${username}.`)
+        repositories.push(...ghRepos)
+        onLog(`GitHub API success: retrieved ${ghRepos.length} public repositories for @${username}.`)
 
-        // Fetch real file trees or synthesize multi-language file indices for top repositories
-        const LANGUAGE_FILE_TEMPLATES = {
-          Python: ['main.py', 'app.py', 'requirements.txt', 'models.py', 'tests/test_api.py'],
-          TypeScript: ['src/index.ts', 'src/App.tsx', 'package.json', 'tsconfig.json'],
-          JavaScript: ['src/index.js', 'src/App.jsx', 'package.json', 'routes/api.js'],
-          Go: ['main.go', 'go.mod', 'pkg/server.go'],
-          Rust: ['src/main.rs', 'Cargo.toml', 'src/lib.rs'],
-          Java: ['src/main/java/Main.java', 'pom.xml', 'src/test/java/AppTest.java'],
-          'C++': ['src/main.cpp', 'CMakeLists.txt', 'include/app.h'],
-          HTML: ['index.html', 'styles.css', 'script.js'],
-          PHP: ['index.php', 'composer.json', 'src/Controller.php'],
-          Ruby: ['app.rb', 'Gemfile', 'config.ru'],
-        }
+        // Inspect up to 30 repositories (prioritizing non-forked original repos first)
+        const reposToInspect = ghRepos
+          .slice()
+          .sort((a, b) => (a.fork === b.fork ? 0 : a.fork ? 1 : -1))
+          .slice(0, 30)
 
-        for (const [idx, r] of repositories.slice(0, 5).entries()) {
+        for (const r of reposToInspect) {
           let indexedForRepo = 0
-          // Attempt to query real git tree from GitHub API if rate limits permit
           try {
             const treeRes = await fetch(
-              `https://api.github.com/repos/${username}/${r.name}/git/trees/${r.default_branch || 'main'}?recursive=1`,
+              `https://api.github.com/repos/${username}/${r.name}/git/trees/${r.default_branch}?recursive=1`,
               { headers }
             )
             if (treeRes.ok) {
               const treeData = await treeRes.json()
               if (treeData.tree && Array.isArray(treeData.tree)) {
-                const codeFiles = treeData.tree.filter(
-                  (t) =>
-                    t.type === 'blob' &&
-                    !t.path.startsWith('.') &&
-                    !t.path.includes('node_modules/') &&
-                    !t.path.includes('vendor/') &&
-                    !t.path.includes('dist/')
-                )
-                for (const item of codeFiles.slice(0, 30)) {
+                const codeFiles = treeData.tree.filter((t) => {
+                  if (t.type !== 'blob' || t.path.startsWith('.')) return false
+                  const lower = t.path.toLowerCase()
+                  if (IGNORED_DIR_PATTERNS.some((p) => lower.includes(p))) return false
+                  if (IGNORED_FILE_EXTENSIONS.some((ext) => lower.endsWith(ext))) return false
+                  return true
+                })
+
+                // Index up to 200 files per repo
+                for (const item of codeFiles.slice(0, 200)) {
                   const fullPath = `${r.name}/${item.path}`
                   const lineEst = Math.max(20, Math.min(600, Math.round((item.size || 1500) / 45)))
                   filesIndex[fullPath] = {
@@ -205,16 +252,29 @@ export async function executeStep1Read(intakeData, onLog = () => {}) {
                   indexedForRepo++
                 }
                 if (indexedForRepo > 0) {
-                  onLog(`Indexed ${indexedForRepo} real files from @${username}/${r.name} tree.`)
+                  onLog(`Indexed ${indexedForRepo} files from @${username}/${r.name} tree.`)
                 }
               }
             }
           } catch {
-            // Ignore rate limits / CORS and use template fallback
+            // Ignore individual repo tree errors
           }
 
-          // If tree API was rate limited or empty, generate files based on repo language
+          // If tree API was rate limited or empty, generate template fallback files
           if (indexedForRepo === 0) {
+            const LANGUAGE_FILE_TEMPLATES = {
+              Python: ['main.py', 'app.py', 'requirements.txt', 'models.py', 'db.sqlite3', 'tests/test_api.py'],
+              TypeScript: ['src/index.ts', 'src/App.tsx', 'package.json', 'tsconfig.json'],
+              JavaScript: ['src/index.js', 'src/App.jsx', 'package.json', 'routes/api.js'],
+              Go: ['main.go', 'go.mod', 'pkg/server.go'],
+              Rust: ['src/main.rs', 'Cargo.toml', 'src/lib.rs'],
+              Java: ['src/main/java/Main.java', 'pom.xml', 'src/test/java/AppTest.java'],
+              'C++': ['src/main.cpp', 'CMakeLists.txt', 'include/app.h'],
+              C: ['src/main.c', 'Makefile', 'include/app.h'],
+              HTML: ['index.html', 'styles.css', 'script.js'],
+              PHP: ['index.php', 'composer.json', 'src/Controller.php'],
+              Ruby: ['app.rb', 'Gemfile', 'config.ru'],
+            }
             const template = LANGUAGE_FILE_TEMPLATES[r.language] || ['src/index.ts', 'package.json']
             template.forEach((relPath, fIdx) => {
               const fullPath = `${r.name}/${relPath}`

@@ -1,0 +1,23 @@
+{
+  "data": {
+    "matchedUser": {
+      "username": "novice_coder",
+      "profile": {
+        "ranking": 450200
+      },
+      "submitStats": {
+        "acSubmissionNum": [
+          { "difficulty": "All", "count": 25 },
+          { "difficulty": "Easy", "count": 20 },
+          { "difficulty": "Medium", "count": 5 },
+          { "difficulty": "Hard", "count": 0 }
+        ]
+      },
+      "tagProblemCounts": null,
+      "languageProblemCount": [
+        { "languageName": "Python", "problemsSolved": 25 }
+      ]
+    },
+    "userContestRanking": null
+  }
+}

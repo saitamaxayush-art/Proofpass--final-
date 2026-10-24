@@ -283,6 +283,8 @@ p { color: var(--muted); }
   border-radius: 2px;
   background: linear-gradient(45deg, transparent 38%, currentColor 38% 62%, transparent 62%);
 }
+.chip.U, .chip.missing, .chip.unchecked { --c: var(--faint, #8b949e); border-style: dashed; }
+.chip.U::before, .chip.missing::before, .chip.unchecked::before { border: 1.5px dashed currentColor; }
 .chip.pending { --c: var(--faint); background: transparent; border-style: dashed; }
 .chip.pending::before { border: 1.5px dashed currentColor; animation: spin 2.4s linear infinite; }
 .chip.lg { font-size: 0.9rem; padding: 8px 13px 8px 11px; }

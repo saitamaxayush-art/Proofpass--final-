@@ -1,0 +1,96 @@
+{
+  "skills": {
+    "Data Structures and Algorithms": {
+      "synonyms": ["DSA", "Data Structures", "Algorithms", "Data Structures & Algorithms"],
+      "codeforces_tags": ["data structures", "brute force", "implementation"],
+      "leetcode_topics": ["Array", "Hash Table", "Stack", "Queue", "Linked List", "Heap (Priority Queue)"]
+    },
+    "Competitive Programming": {
+      "synonyms": ["CP", "Competitive Coding"],
+      "codeforces_tags": ["implementation", "brute force", "greedy", "math", "data structures"],
+      "leetcode_topics": ["Array", "Hash Table", "Math", "Dynamic Programming", "Greedy"]
+    },
+    "Dynamic Programming": {
+      "synonyms": ["DP", "Dynamic programming"],
+      "codeforces_tags": ["dp", "2-sat"],
+      "leetcode_topics": ["Dynamic Programming", "Memoization"]
+    },
+    "Graphs": {
+      "synonyms": ["Graph", "Graph Theory", "Graph Algorithms"],
+      "codeforces_tags": ["graphs", "dfs and similar", "shortest paths", "dsu", "graph matchings", "flows"],
+      "leetcode_topics": ["Graph", "Breadth-First Search", "Depth-First Search", "Shortest Path", "Union Find", "Topological Sort"]
+    },
+    "Trees": {
+      "synonyms": ["Tree", "Binary Trees", "Binary Search Tree"],
+      "codeforces_tags": ["trees"],
+      "leetcode_topics": ["Tree", "Binary Tree", "Binary Search Tree", "Trie"]
+    },
+    "Greedy": {
+      "synonyms": ["Greedy Algorithms", "Greedy Approach"],
+      "codeforces_tags": ["greedy"],
+      "leetcode_topics": ["Greedy"]
+    },
+    "Binary Search": {
+      "synonyms": ["BS", "Binary search"],
+      "codeforces_tags": ["binary search", "ternary search"],
+      "leetcode_topics": ["Binary Search"]
+    },
+    "Math": {
+      "synonyms": ["Mathematics", "Number Theory", "Combinatorics"],
+      "codeforces_tags": ["math", "number theory", "combinatorics", "geometry", "probabilities", "matrices"],
+      "leetcode_topics": ["Math", "Number Theory", "Geometry", "Combinatorics", "Probability and Statistics"]
+    },
+    "Strings": {
+      "synonyms": ["String", "String Algorithms", "String Manipulation"],
+      "codeforces_tags": ["strings", "string suffix structures"],
+      "leetcode_topics": ["String", "String Matching"]
+    },
+    "Sorting": {
+      "synonyms": ["Sortings", "Sorting Algorithms"],
+      "codeforces_tags": ["sortings"],
+      "leetcode_topics": ["Sorting", "Bucket Sort", "Counting Sort", "Radix Sort"]
+    },
+    "Recursion and Backtracking": {
+      "synonyms": ["Backtracking", "Recursion", "Recursion & Backtracking"],
+      "codeforces_tags": ["dfs and similar", "brute force"],
+      "leetcode_topics": ["Backtracking", "Recursion"]
+    }
+  },
+  "languages": {
+    "C++": {
+      "synonyms": ["CPP", "C plus plus", "GNU C++", "C++20", "C++17", "C++14", "C++11"],
+      "codeforces_matches": ["C++", "GNU C++", "Clang++"],
+      "leetcode_matches": ["C++"]
+    },
+    "Python": {
+      "synonyms": ["Python3", "Python 3", "PyPy", "PyPy3"],
+      "codeforces_matches": ["Python", "PyPy"],
+      "leetcode_matches": ["Python", "Python3"]
+    },
+    "Java": {
+      "synonyms": ["Java 8", "Java 11", "Java 17", "Java 21"],
+      "codeforces_matches": ["Java"],
+      "leetcode_matches": ["Java"]
+    },
+    "JavaScript": {
+      "synonyms": ["JS", "Node.js", "NodeJS", "ECMAScript"],
+      "codeforces_matches": ["JavaScript", "Node.js"],
+      "leetcode_matches": ["JavaScript"]
+    },
+    "Go": {
+      "synonyms": ["Golang"],
+      "codeforces_matches": ["Go"],
+      "leetcode_matches": ["Go"]
+    },
+    "Rust": {
+      "synonyms": ["Rustlang"],
+      "codeforces_matches": ["Rust"],
+      "leetcode_matches": ["Rust"]
+    },
+    "Kotlin": {
+      "synonyms": ["Kotlin/JVM"],
+      "codeforces_matches": ["Kotlin"],
+      "leetcode_matches": ["Kotlin"]
+    }
+  }
+}

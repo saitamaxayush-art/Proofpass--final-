@@ -1,0 +1,50 @@
+{
+  "data": {
+    "matchedUser": {
+      "username": "alexrivera",
+      "profile": {
+        "ranking": 12450
+      },
+      "submitStatsGlobal": {
+        "acSubmissionNum": [
+          { "difficulty": "All", "count": 485 },
+          { "difficulty": "Easy", "count": 160 },
+          { "difficulty": "Medium", "count": 250 },
+          { "difficulty": "Hard", "count": 75 }
+        ]
+      },
+      "tagProblemCounts": {
+        "fundamental": [
+          { "tagName": "Array", "tagSlug": "array", "problemsSolved": 180 },
+          { "tagName": "String", "tagSlug": "string", "problemsSolved": 120 },
+          { "tagName": "Sorting", "tagSlug": "sorting", "problemsSolved": 65 },
+          { "tagName": "Hash Table", "tagSlug": "hash-table", "problemsSolved": 110 },
+          { "tagName": "Math", "tagSlug": "math", "problemsSolved": 45 }
+        ],
+        "intermediate": [
+          { "tagName": "Dynamic Programming", "tagSlug": "dynamic-programming", "problemsSolved": 95 },
+          { "tagName": "Tree", "tagSlug": "tree", "problemsSolved": 80 },
+          { "tagName": "Binary Search", "tagSlug": "binary-search", "problemsSolved": 55 },
+          { "tagName": "Greedy", "tagSlug": "greedy", "problemsSolved": 48 }
+        ],
+        "advanced": [
+          { "tagName": "Graph", "tagSlug": "graph", "problemsSolved": 52 },
+          { "tagName": "Backtracking", "tagSlug": "backtracking", "problemsSolved": 30 }
+        ]
+      },
+      "languageProblemCount": [
+        { "languageName": "C++", "problemsSolved": 310 },
+        { "languageName": "Python3", "problemsSolved": 175 }
+      ]
+    },
+    "userContestRanking": {
+      "rating": 2185.4,
+      "topPercentage": 2.1,
+      "globalRanking": 1420,
+      "totalParticipants": 68000,
+      "badge": {
+        "name": "Guardian"
+      }
+    }
+  }
+}
