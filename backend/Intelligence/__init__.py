@@ -2,7 +2,6 @@
 M4: AI, Skill Intelligence and Passport Logic
 Public API for the intelligence module.
 """
-
 from .models import (
     Claim, Evidence, RepoMetadata, VerificationResult,
     SkillAssessment, SkillGap, PassportPayload,

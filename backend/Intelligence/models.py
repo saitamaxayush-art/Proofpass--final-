@@ -1,25 +1,19 @@
 """
-Pydantic models matching the shared contract.
+Pydantic models matching the shared contract and blueprint.
 """
 from __future__ import annotations
-
 import uuid
 from enum import Enum
 from typing import List, Optional, Literal
-
+from datetime import datetime, timezone
 from pydantic import BaseModel, Field, field_validator
 
-
-# ---------------------------------------------------------------------------
-# Enums
-# ---------------------------------------------------------------------------
-
+# --- Enums ---
 class ClaimState(str, Enum):
     VERIFIED = "Verified"
     SUPPORTED = "Supported"
     CLAIMED = "Claimed"
     CONTRADICTED = "Contradicted"
-
 
 class TrustCeiling(str, Enum):
     PLATFORM_VERIFIED = "Platform-Verified"
@@ -27,19 +21,16 @@ class TrustCeiling(str, Enum):
     CANDIDATE_SUPPLIED = "Candidate-Supplied"
     UNVERIFIED = "Unverified"
 
-
 class UsageDepth(str, Enum):
     NONE = "none"
     DETECTED = "detected"
     MODERATE = "moderate"
     SUBSTANTIAL = "substantial"
 
-
 class AuthorshipSignal(str, Enum):
     NONE = "none"
     PARTIAL = "partial"
     STRONG = "strong"
-
 
 class QuizStatus(str, Enum):
     NOT_REQUIRED = "not_required"
@@ -47,18 +38,13 @@ class QuizStatus(str, Enum):
     PASSED = "passed"
     FAILED = "failed"
 
-
 class QuestionType(str, Enum):
     FAKE_PREMISE = "fake_premise"
     GIT_HISTORY = "git_history"
     BUSINESS_LOGIC = "business_logic"
     MICRO_MODIFICATION = "micro_modification"
 
-
-# ---------------------------------------------------------------------------
-# Input / intermediate models
-# ---------------------------------------------------------------------------
-
+# --- Input Models ---
 class Claim(BaseModel):
     claim_id: str = Field(default_factory=lambda: f"cl_{uuid.uuid4().hex[:8]}")
     skill: str = Field(min_length=1)
@@ -70,12 +56,11 @@ class Claim(BaseModel):
     def _strip(cls, v: str) -> str:
         return v.strip()
 
-
 class Evidence(BaseModel):
     evidence_id: str = Field(default_factory=lambda: f"ev_{uuid.uuid4().hex[:8]}")
     claim_id: str
     skill: str
-    source_type: str = "github_code"
+    source_type: str = "github_code"  # Shared contract default
     file_path: Optional[str] = None
     file_exists: bool
     content_sha256: Optional[str] = None
@@ -85,28 +70,23 @@ class Evidence(BaseModel):
     commit_count: int = Field(ge=0, default=0)
     conflicts: List[str] = Field(default_factory=list)
 
-
 class RepoMetadata(BaseModel):
     is_fork: bool = False
     fork_of: Optional[str] = None
-    default_branch: Optional[str] = None 
+    default_branch: Optional[str] = None  # Shared contract fix
+    size_kb: Optional[int] = None         # Shared contract fix
 
 class VerificationResult(BaseModel):
     provenance: TrustCeiling = TrustCeiling.UNVERIFIED
     repo: RepoMetadata = Field(default_factory=RepoMetadata)
     evidence: List[Evidence] = Field(default_factory=list)
 
-
-# ---------------------------------------------------------------------------
-# Output models (Shared Contract)
-# ---------------------------------------------------------------------------
-
+# --- Output Models (Blueprint Aligned) ---
 class EvidenceChainItem(BaseModel):
     file: Optional[str] = None
     commit: Optional[str] = None
     author_lines_pct: float = Field(ge=0.0, le=1.0, default=0.0)
     source: Literal["repo", "coding_platform", "certificate"]
-
 
 class SkillAssessment(BaseModel):
     name: str
@@ -117,14 +97,13 @@ class SkillAssessment(BaseModel):
     quiz_status: QuizStatus = QuizStatus.NOT_REQUIRED
     evidence_chain: List[EvidenceChainItem] = Field(default_factory=list)
 
-
 class SkillGap(BaseModel):
     skill: str
     required_weight: float = Field(ge=0.0, le=1.0)
     current_state: ClaimState
     recommended_action: str
     gap_reduction_pct: float = Field(ge=0.0, le=1.0)
-
+    gap_type: Literal["proof_gap", "knowledge_gap"] = "knowledge_gap"
 
 class RoleMatchBreakdown(BaseModel):
     skill: str
@@ -133,7 +112,6 @@ class RoleMatchBreakdown(BaseModel):
     contribution: float
     evidence_ids: List[str] = Field(default_factory=list)
 
-
 class LearningPlanItem(BaseModel):
     skill: str
     rank: int = Field(ge=1)
@@ -141,7 +119,6 @@ class LearningPlanItem(BaseModel):
     resource_url: str
     resource_type: Literal["imocha_assessment", "free_course", "project"]
     gap_reduction_pct: float = Field(ge=0.0, le=1.0)
-
 
 class PassportPayload(BaseModel):
     passport_id: str = Field(default_factory=lambda: f"pp_{uuid.uuid4().hex[:12]}")
@@ -155,12 +132,9 @@ class PassportPayload(BaseModel):
     learning_plan: List[LearningPlanItem] = Field(default_factory=list)
     signature: Optional[str] = None
     public_key_id: Optional[str] = None
+    generated_at: str = Field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
 
-
-# ---------------------------------------------------------------------------
-# Quiz models
-# ---------------------------------------------------------------------------
-
+# --- Quiz Models ---
 class QuizQuestion(BaseModel):
     question_id: str = Field(default_factory=lambda: f"qq_{uuid.uuid4().hex[:8]}")
     claim_id: str
@@ -170,27 +144,20 @@ class QuizQuestion(BaseModel):
     context_snippet: Optional[str] = None
     expected_answer_hints: List[str] = Field(default_factory=list)
 
-
 class QuizAnswer(BaseModel):
     question_id: str
     answer_text: str = Field(min_length=1)
-
 
 class QuizResult(BaseModel):
     question_id: str
     passed: bool
     reasoning: str = ""
 
-
-# ---------------------------------------------------------------------------
-# Target role models
-# ---------------------------------------------------------------------------
-
+# --- Target Role Models ---
 class RequiredSkill(BaseModel):
     skill: str
     weight: float = Field(ge=0.0, le=1.0)
     importance: Literal["required", "preferred", "bonus"] = "required"
-
 
 class TargetRole(BaseModel):
     role_name: str
@@ -201,9 +168,7 @@ class TargetRole(BaseModel):
     @classmethod
     def _weights_sum(cls, v: List[RequiredSkill]) -> List[RequiredSkill]:
         total = sum(s.weight for s in v)
-        if total <= 0:
-            return v
+        if total <= 0: return v
         return [s.model_copy(update={"weight": s.weight / total}) for s in v]
-
 
 PassportPayload.model_rebuild()

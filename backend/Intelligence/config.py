@@ -4,7 +4,6 @@ Configuration. All secrets come from environment variables.
 import os
 from dataclasses import dataclass
 
-
 @dataclass
 class IntelligenceConfig:
     llm_api_key: str = ""
@@ -12,7 +11,7 @@ class IntelligenceConfig:
     llm_model: str = "gpt-4o-mini"
     llm_timeout: int = 30
     llm_max_retries: int = 1
-    fallback_to_mock: bool = True  # If True, use mock responses when LLM fails
+    fallback_to_mock: bool = True
 
     @classmethod
     def from_env(cls) -> "IntelligenceConfig":
@@ -24,6 +23,5 @@ class IntelligenceConfig:
             llm_max_retries=int(os.getenv("INTELLIGENCE_LLM_MAX_RETRIES", "1")),
             fallback_to_mock=os.getenv("INTELLIGENCE_FALLBACK_TO_MOCK", "true").lower() == "true",
         )
-
 
 config = IntelligenceConfig.from_env()

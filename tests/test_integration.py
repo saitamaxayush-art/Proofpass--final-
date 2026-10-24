@@ -35,7 +35,8 @@ def test_full_pipeline():
         assert result.passed is True
 
     # 4. Match role
-    score, breakdown = match_role(assessments, MOCK_TARGET_ROLE)
+    # UPDATED: Now unpacks 3 values (score, breakdown, bonus_skills)
+    score, breakdown, bonus_skills = match_role(assessments, MOCK_TARGET_ROLE)
     assert 0.0 <= score <= 1.0
 
     # 5. Compute gaps
