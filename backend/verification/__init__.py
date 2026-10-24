@@ -26,6 +26,9 @@ from .git_engine import (
 )
 from .heuristics import detect_conflicts_for_evidence, compute_provenance
 from .verifier import verify
+from .platforms import PlatformEvidence, collect_platform_evidence
+from .platform_matcher import SkillPlatformSupport, match_platform_to_skills
+from .platform_conflicts import PlatformConflict, check_platform_claims
 from .fixtures import (
     FIXTURE_CLAIMS,
     EXPECTED_VERIFICATION_STRONG,
@@ -53,6 +56,12 @@ __all__ = [
     "detect_conflicts_for_evidence",
     "compute_provenance",
     "verify",
+    "PlatformEvidence",
+    "collect_platform_evidence",
+    "SkillPlatformSupport",
+    "match_platform_to_skills",
+    "PlatformConflict",
+    "check_platform_claims",
     "FIXTURE_CLAIMS",
     "EXPECTED_VERIFICATION_STRONG",
     "EXPECTED_VERIFICATION_CONFLICT",

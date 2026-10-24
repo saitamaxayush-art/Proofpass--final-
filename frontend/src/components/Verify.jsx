@@ -30,6 +30,7 @@ import { useAuth } from '../auth/AuthContext.jsx'
 import { savePassport } from '../api/passports.js'
 import { buildRoadmapsForGaps } from '../lib/roadmap.js'
 import { saveRoadmapsFromVerification, updateRoadmapStep } from '../api/roadmaps.js'
+import { CodingProfilesField } from './CodingProfilesField.jsx'
 
 const STEP_DEFINITIONS = [
   { id: 0, title: 'Intake', subtitle: 'Form and consent' },
@@ -167,6 +168,9 @@ export default function Verify() {
   const [targetRole, setTargetRole] = useState('')
   const [consentAi, setConsentAi] = useState(false)
   const [consentRepo, setConsentRepo] = useState(false)
+  const [codingProfiles, setCodingProfiles] = useState([
+    { id: 'cp_0', value: '', error: null, parsed: null },
+  ])
   const [formErrors, setFormErrors] = useState({})
 
   // Prefill from user profile if available
@@ -304,6 +308,14 @@ export default function Verify() {
 
   // STEP 0: Start Verification Form Submission
   const handleStartVerification = async () => {
+    const validCodingProfiles = (codingProfiles || [])
+      .filter((r) => r && r.value && r.value.trim() && r.parsed && !r.error)
+      .map((r) => ({
+        platform: r.parsed.platform,
+        handle: r.parsed.handle,
+        url: r.parsed.canonicalUrl,
+      }))
+
     const formPayload = {
       resumeText: resumeText || extractedResumeInfo?.text || '',
       resumeFile,
@@ -316,6 +328,9 @@ export default function Verify() {
       targetRole,
       consentAi,
       consentRepo,
+      extras: {
+        coding_profiles: validCodingProfiles,
+      },
     }
 
     const { valid, errors } = validateIntake(formPayload)
@@ -778,7 +793,11 @@ export default function Verify() {
                   {formErrors.evidence && <p className="field-error">{formErrors.evidence}</p>}
                 </div>
 
-                {/* 3. Optional LeetCode URL */}
+                {/* Coding Profiles Input */}
+                <CodingProfilesField
+                  value={codingProfiles}
+                  onChange={setCodingProfiles}
+                />
                 <div className="form-group">
                   <label className="form-label">3. LeetCode Profile URL (Optional)</label>
                   <input
@@ -1262,11 +1281,14 @@ export default function Verify() {
                   <span className="k m">EVIDENCE-WEIGHTED MATCH</span>
                   <div className="match-big m">{roleMatchData.matchPercentage}%</div>
                   <div className="match-bar">
-                    <div className="bar-v" style={{ width: `${(statesData.counts.V / statesData.totalSkills) * 100}%` }} />
-                    <div className="bar-s" style={{ width: `${(statesData.counts.S / statesData.totalSkills) * 100}%` }} />
-                    <div className="bar-c" style={{ width: `${(statesData.counts.C / statesData.totalSkills) * 100}%` }} />
+                    <div className="bar-v" style={{ width: `${roleMatchData.matchPercentage}%` }} />
                   </div>
-                  <p className="m match-note">{roleMatchData.disclaimer}</p>
+                  <div className="match-stats-row" style={{ display: 'flex', flexWrap: 'wrap', gap: 16, marginTop: 12, fontSize: '0.85rem', color: 'var(--muted)' }}>
+                    <span>Candidate Claim Verification: <strong style={{ color: 'var(--text)' }}>{roleMatchData.claimVerificationRate ?? Math.round((statesData.counts.V / statesData.totalSkills) * 100)}%</strong> ({statesData.counts.V} of {statesData.totalSkills} verified)</span>
+                    <span>•</span>
+                    <span>Role Criteria Evaluated: <strong style={{ color: 'var(--text)' }}>{roleMatchData.roleReqs?.length || 0} skills</strong></span>
+                  </div>
+                  <p className="m match-note" style={{ marginTop: 8 }}>{roleMatchData.disclaimer}</p>
                 </div>
 
                 <div className="table-card" style={{ marginTop: 20 }}>

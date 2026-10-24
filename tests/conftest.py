@@ -5,11 +5,14 @@ from pathlib import Path
 BACKEND = Path(__file__).resolve().parents[1] / "backend"
 sys.path.insert(0, str(BACKEND))
 
-try:
-    import intelligence  # type: ignore
-except ModuleNotFoundError:
-    import Intelligence  # type: ignore
-    sys.modules["intelligence"] = Intelligence
+import intelligence  # type: ignore
+import intelligence.models  # type: ignore
+sys.modules["Intelligence"] = intelligence
+sys.modules["Intelligence.models"] = intelligence.models
+sys.modules["backend.Intelligence"] = intelligence
+sys.modules["backend.Intelligence.models"] = intelligence.models
+sys.modules["backend.intelligence"] = intelligence
+sys.modules["backend.intelligence.models"] = intelligence.models
 
 import pytest
 from intelligence.fixtures import (

@@ -5,7 +5,7 @@ from __future__ import annotations
 
 import uuid
 from enum import Enum
-from typing import List, Optional, Literal
+from typing import Any, Dict, List, Optional, Literal
 
 from pydantic import BaseModel, Field, field_validator
 
@@ -64,6 +64,7 @@ class Claim(BaseModel):
     skill: str = Field(min_length=1)
     resume_pointer: str
     repo_hint: Optional[str] = None
+    raw_statement: Optional[str] = None
 
     @field_validator("skill")
     @classmethod
@@ -106,8 +107,31 @@ class VerificationResult(BaseModel):
 class EvidenceChainItem(BaseModel):
     file: Optional[str] = None
     commit: Optional[str] = None
-    author_lines_pct: float = Field(ge=0.0, le=1.0, default=0.0)
+    author_lines_pct: Optional[float] = Field(default=None, ge=0.0, le=1.0)
     source: Literal["repo", "coding_platform", "certificate"]
+    label: Optional[str] = None
+    detail: Optional[str] = None
+    url: Optional[str] = None
+    fetched_at: Optional[str] = None
+    ownership_verified: Optional[bool] = None
+    ceiling_applied: Optional[TrustCeiling] = None
+
+
+class PlatformProfileSummary(BaseModel):
+    platform: str
+    handle: str
+    url: str
+    status: Literal["ok", "cached", "unavailable", "not_found"]
+    fetched_at: str
+    rating: Optional[int] = None
+    rank_title: Optional[str] = None
+    global_rank: Optional[int] = None
+    solved_total: int = 0
+    solved_by_difficulty: Dict[str, int] = Field(default_factory=dict)
+    top_topics: List[Dict[str, Any]] = Field(default_factory=list)
+    top_languages: List[Dict[str, Any]] = Field(default_factory=list)
+    ownership_verified: bool = False
+    caveat: Optional[str] = "Handle ownership not verified"
 
 
 class SkillAssessment(BaseModel):
@@ -155,6 +179,8 @@ class PassportPayload(BaseModel):
     role_breakdown: List[RoleMatchBreakdown] = Field(default_factory=list)
     quiz_questions: List["QuizQuestion"] = Field(default_factory=list)
     learning_plan: List[LearningPlanItem] = Field(default_factory=list)
+    platform_profiles: List[PlatformProfileSummary] = Field(default_factory=list)
+    notes: List[str] = Field(default_factory=list)
     signature: Optional[str] = None
     public_key_id: Optional[str] = None
 
