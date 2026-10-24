@@ -12,6 +12,10 @@ export async function executeStep5AssignStates(authorshipData, readData, onLog =
       state = 'X' // Contradicted
       rationale = 'Contradicted: On resume as a skill claim, but evidence conflicts with claim (e.g. forked tutorial with zero original commits).'
       evidence = item.filePath !== 'None' ? `${item.filePath}, forked tutorial with 0 author commits` : 'Forked tutorial repository with 0 original commits'
+    } else if (item.confirmedInStep3 || (item.isOriginalAuthor && item.lineShare >= 75 && item.commitCount >= 20)) {
+      state = 'V' // Verified: Confirmed code exists in repository with deterministic integrity check and verified authorship
+      rationale = 'Verified: Confirmed code exists in repository with deterministic integrity check and verified authorship.'
+      evidence = `${item.filePath}, ${item.lineShare}% lines across ${item.filesTouched} files, ${item.commitCount} commits`
     } else if (item.source === 'certificate' || item.ceiling === 60) {
       state = 'S' // Supported
       rationale = 'Supported: Third-party certificate or platform assessment verified (trust ceiling 60). One micro-check away from Verified.'
@@ -20,10 +24,6 @@ export async function executeStep5AssignStates(authorshipData, readData, onLog =
       state = 'S' // Supported
       rationale = 'Supported: Algorithmic problem solving demonstrated on LeetCode (trust ceiling 60). Valid for DSA skills.'
       evidence = item.filePath || 'LeetCode profile submissions verified'
-    } else if (item.lineShare >= 75 && item.commitCount >= 20) {
-      state = 'S' // Supported: Highest code trust ceiling 80, ready for Step 6 micro-check to reach Verified (100)
-      rationale = 'Supported: Confirmed code exists with strong line share and commit frequency. Requires Step 6 micro-check to reach Verified.'
-      evidence = `${item.filePath}, ${item.lineShare}% lines across ${item.filesTouched} files, ${item.commitCount} commits`
     } else if (item.lineShare > 0) {
       state = 'S' // Supported
       rationale = 'Supported: Code exists, but usage depth or testing is partial. One micro-check away from Verified.'

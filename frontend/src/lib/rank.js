@@ -32,7 +32,18 @@ export function rankApplicants(role, applicants = []) {
   const evaluated = applicants.map((applicant) => {
     const skills = applicant.passport?.skills || []
     const skillMap = new Map()
-    skills.forEach((s) => skillMap.set(s.skill.toLowerCase(), s))
+    skills.forEach((s) => {
+      const name = (s.skill || s.name || '').toLowerCase().trim()
+      if (name) {
+        const rawState = s.state || s.claim_state || 'C'
+        const stateKey = rawState.length > 1 ? rawState[0].toUpperCase() : rawState
+        skillMap.set(name, {
+          ...s,
+          skill: s.skill || s.name,
+          state: stateKey,
+        })
+      }
+    })
 
     let earnedScore = 0
     let verifiedReqCount = 0

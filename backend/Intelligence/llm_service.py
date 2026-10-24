@@ -116,12 +116,93 @@ def parse_target_role(jd_text: str, default_role_name: str = "Software Engineer"
     except Exception:
         return _mock_target_role(default_role_name) if config.fallback_to_mock else TargetRole(role_name=default_role_name)
 
-def _mock_extract_claims(text: str) -> List[Claim]:
-    keywords = {"React": ["react"], "Python": ["python"], "Node.js": ["node"], "PostgreSQL": ["postgres"], "AWS": ["aws"], "Docker": ["docker"]}
-    lower = text.lower()
-    return [Claim(skill=k, resume_pointer="mock", repo_hint=None) for k, v in keywords.items() if any(var in lower for var in v)]
+# Comprehensive deterministic technical skill patterns for verifiable technical extraction
+TECHNICAL_SKILL_PATTERNS = [
+    ("React", re.compile(r"\b(?:react(?:\.js|js)?|react-native)\b", re.IGNORECASE)),
+    ("TypeScript", re.compile(r"\b(?:typescript|ts)\b", re.IGNORECASE)),
+    ("JavaScript", re.compile(r"\b(?:javascript|js|es6|ecmascript)\b", re.IGNORECASE)),
+    ("Python", re.compile(r"\b(?:python(?:3)?)\b", re.IGNORECASE)),
+    ("Node.js", re.compile(r"\b(?:node(?:\.js|js)?|nodejs)\b", re.IGNORECASE)),
+    ("REST APIs", re.compile(r"\b(?:rest(?:ful)?(?:\s+apis?)?|rest\s*api)\b", re.IGNORECASE)),
+    ("PostgreSQL", re.compile(r"\b(?:postgres(?:ql)?|psql)\b", re.IGNORECASE)),
+    ("Docker", re.compile(r"\b(?:docker(?:file)?|containerization)\b", re.IGNORECASE)),
+    ("Testing", re.compile(r"\b(?:unit\s+test(?:ing|s)?|integration\s+test(?:ing|s)?|jest|pytest|vitest|tdd|cypress)\b", re.IGNORECASE)),
+    ("Git workflow", re.compile(r"\b(?:git(?:\s+workflow)?|github|gitlab|version\s+control)\b", re.IGNORECASE)),
+    ("System design", re.compile(r"\b(?:system\s+design|distributed\s+systems?)\b", re.IGNORECASE)),
+    ("Kubernetes", re.compile(r"\b(?:kubernetes|k8s|kubectl|helm)\b", re.IGNORECASE)),
+    ("AWS", re.compile(r"\b(?:aws|amazon\s+web\s+services|boto3|s3|ec2|dynamodb)\b", re.IGNORECASE)),
+    ("Data Structures and Algorithms", re.compile(r"\b(?:data\s+structures?(?:\s*(?:&|and)\s*algorithms?)?|dsa|algorithms?)\b", re.IGNORECASE)),
+    ("Competitive Programming", re.compile(r"\b(?:competitive\s+(?:programming|coding)|codeforces|leetcode)\b", re.IGNORECASE)),
+    ("Dynamic Programming", re.compile(r"\b(?:dynamic\s+programming)\b", re.IGNORECASE)),
+    ("Next.js", re.compile(r"\b(?:next(?:\.js|js)?)\b", re.IGNORECASE)),
+    ("GraphQL", re.compile(r"\b(?:graphql|apollo)\b", re.IGNORECASE)),
+    ("Redis", re.compile(r"\b(?:redis)\b", re.IGNORECASE)),
+    ("Go", re.compile(r"(?:\bgolang\b|\bgo\s+(?:programming|language)\b|(?<=[,\s\(\/\:;])go(?=[,\s\/\)\.;]|$))", re.IGNORECASE)),
+    ("Rust", re.compile(r"\b(?:rust|cargo)\b", re.IGNORECASE)),
+    ("SQL", re.compile(r"\b(?:sql|rdbms|relational\s+database)\b", re.IGNORECASE)),
+    ("SQLite", re.compile(r"\b(?:sqlite(?:3)?)\b", re.IGNORECASE)),
+    ("CI/CD", re.compile(r"\b(?:ci\s*[/]\s*cd|continuous\s+integration|github\s+actions)\b", re.IGNORECASE)),
+    ("FastAPI", re.compile(r"\b(?:fastapi|uvicorn|starlette)\b", re.IGNORECASE)),
+    ("Django", re.compile(r"\b(?:django)\b", re.IGNORECASE)),
+    ("Flask", re.compile(r"\b(?:flask|werkzeug)\b", re.IGNORECASE)),
+    ("Java", re.compile(r"\bjava\b(?!\s*script)", re.IGNORECASE)),
+    ("C++", re.compile(r"(?:\bcpp\b|\bc\+\+(?=[,\s\/\)\.;]|$))", re.IGNORECASE)),
+    ("C", re.compile(r"(?:\bc\s*[\/]\s*c\+\+|\bc\s+(?:programming|language)\b|\bansi\s+c\b|(?<=[,\s\(\/\:;])c(?=[,\s\/\)\.;]|$)(?!\+\+|#))", re.IGNORECASE)),
+    ("MongoDB", re.compile(r"\b(?:mongo(?:db)?|mongoose)\b", re.IGNORECASE)),
+    ("MySQL", re.compile(r"\b(?:mysql)\b", re.IGNORECASE)),
+    ("Tailwind", re.compile(r"\b(?:tailwind(?:css)?)\b", re.IGNORECASE)),
+    ("Linux", re.compile(r"\b(?:linux|ubuntu|bash|shell\s+scripting)\b", re.IGNORECASE)),
+    ("Microservices", re.compile(r"\b(?:microservices?)\b", re.IGNORECASE)),
+    ("HTML/CSS", re.compile(r"\b(?:html(?:5)?|css(?:3)?)\b", re.IGNORECASE)),
+    ("Vue", re.compile(r"\b(?:vue(?:\.js|js)?)\b", re.IGNORECASE)),
+    ("Angular", re.compile(r"\b(?:angular(?:\.js|js)?)\b", re.IGNORECASE)),
+    ("Express", re.compile(r"\b(?:express(?:\.js|js)?)\b", re.IGNORECASE)),
+    ("Spring", re.compile(r"\b(?:spring(?:\s+boot)?)\b", re.IGNORECASE)),
+    ("PyTorch", re.compile(r"\b(?:pytorch|torch)\b", re.IGNORECASE)),
+    ("TensorFlow", re.compile(r"\b(?:tensorflow|keras)\b", re.IGNORECASE)),
+    ("Pandas", re.compile(r"\b(?:pandas|numpy)\b", re.IGNORECASE)),
+]
 
-def _mock_target_role(name: str) -> TargetRole:
+def _mock_extract_claims(text: str) -> List[Claim]:
+    if not text:
+        return []
+    lines = text.splitlines()
+    claims: List[Claim] = []
+    seen_skills = set()
+
+    for name, pattern in TECHNICAL_SKILL_PATTERNS:
+        if name in seen_skills:
+            continue
+        if name.lower() in SOFT_SKILLS_BLOCKLIST:
+            continue
+        matched_pointer = None
+        for idx, line in enumerate(lines):
+            if pattern.search(line):
+                matched_pointer = f"Line {idx + 1}: {line.strip()[:80]}"
+                break
+        if not matched_pointer and pattern.search(text):
+            matched_pointer = "Resume text match"
+
+        if matched_pointer:
+            seen_skills.add(name)
+            claims.append(Claim(skill=name, resume_pointer=matched_pointer, repo_hint=None))
+
+    return claims
+
+def _mock_target_role(name: str, jd_text: str = "") -> TargetRole:
+    if jd_text:
+        detected_skills = []
+        for sname, pat in TECHNICAL_SKILL_PATTERNS:
+            if pat.search(jd_text) and sname.lower() not in SOFT_SKILLS_BLOCKLIST:
+                detected_skills.append(sname)
+        if detected_skills:
+            weight = round(1.0 / len(detected_skills), 3)
+            req_skills = [RequiredSkill(skill=s, weight=weight, importance="required") for s in detected_skills]
+            total = sum(s.weight for s in req_skills)
+            if total > 0 and abs(total - 1.0) > 1e-5:
+                req_skills[-1].weight = round(req_skills[-1].weight + (1.0 - total), 3)
+            return TargetRole(role_name=name, description=jd_text[:120], required_skills=req_skills)
+
     return TargetRole(role_name=name, required_skills=[
         RequiredSkill(skill="React", weight=0.3), RequiredSkill(skill="Python", weight=0.3),
         RequiredSkill(skill="PostgreSQL", weight=0.2), RequiredSkill(skill="AWS", weight=0.2)

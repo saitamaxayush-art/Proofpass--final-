@@ -35,16 +35,25 @@ from verification.resume_extractor import extract_resume_text
 from intelligence.llm_service import extract_claims, parse_target_role
 from intelligence.models import Claim, TargetRole
 
+try:
+    from dotenv import load_dotenv
+    load_dotenv()
+except Exception:
+    pass
+
 app = FastAPI(
     title="ProofPass API",
     description="Deterministic Evidence Verification and Skill Intelligence API",
     version="2.0.0",
 )
 
-# Enable CORS for local Vite dev server
+# Enable CORS with credentials for the frontend origin only (never wildcard with credentials)
+frontend_origins_raw = os.getenv("FRONTEND_ORIGIN", "http://localhost:5173,http://127.0.0.1:5173")
+allowed_origins = [o.strip() for o in frontend_origins_raw.split(",") if o.strip()]
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=allowed_origins,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],

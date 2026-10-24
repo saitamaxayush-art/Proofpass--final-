@@ -9,6 +9,7 @@ import ErrorBoundary from './ErrorBoundary.jsx'
 import VerificationChatbot from './VerificationChatbot.jsx'
 import { RM, scroller } from '../lib.js'
 import { L } from '../data.js'
+import { matchSkillsFromText } from '../data/taxonomy.js'
 import {
   validateIntake,
   SAMPLE_RESUME_TEXT,
@@ -30,6 +31,7 @@ import { useAuth } from '../auth/AuthContext.jsx'
 import { savePassport } from '../api/passports.js'
 import { buildRoadmapsForGaps } from '../lib/roadmap.js'
 import { saveRoadmapsFromVerification, updateRoadmapStep } from '../api/roadmaps.js'
+import { getGitHubSession, logoutGitHubSession } from '../api/auth.js'
 import { CodingProfilesField } from './CodingProfilesField.jsx'
 
 const STEP_DEFINITIONS = [
@@ -161,10 +163,12 @@ export default function Verify() {
   const [isExtractingResume, setIsExtractingResume] = useState(false)
   const [extractedResumeInfo, setExtractedResumeInfo] = useState(null)
   const [evidenceMode, setEvidenceMode] = useState('github')
-  const [githubUrl, setGithubUrl] = useState('')
+  const [githubUser, setGithubUser] = useState(null)
+  const [isCheckingAuth, setIsCheckingAuth] = useState(true)
+  const [authError, setAuthError] = useState(null)
+  const [authAnnouncement, setAuthAnnouncement] = useState('')
   const [zipFile, setZipFile] = useState(null)
   const [certInput, setCertInput] = useState('')
-  const [leetcodeUrl, setLeetcodeUrl] = useState('')
   const [targetRole, setTargetRole] = useState('')
   const [consentAi, setConsentAi] = useState(false)
   const [consentRepo, setConsentRepo] = useState(false)
@@ -173,16 +177,94 @@ export default function Verify() {
   ])
   const [formErrors, setFormErrors] = useState({})
 
+  const isMockMode = (typeof import.meta !== 'undefined' && import.meta.env?.VITE_USE_MOCK === 'true')
+
+  // Check active GitHub session and handle OAuth callback query parameters
+  useEffect(() => {
+    let mounted = true
+
+    const params = new URLSearchParams(window.location.search)
+    const errParam = params.get('auth_error')
+    const successParam = params.get('auth_success')
+
+    if (errParam) {
+      const errMessages = {
+        cancelled: 'GitHub connection was cancelled. You can try connecting again.',
+        state_mismatch: 'Security validation failed (state mismatch). Please try again.',
+        github_down: 'GitHub service was unreachable. Please try again in a few moments.',
+        token_exchange_failed: 'Failed to exchange authorization code with GitHub. Please try again.',
+        state_missing: 'Missing authentication state parameter. Please try again.',
+        invalid_user: 'Could not retrieve verified user profile from GitHub.',
+      }
+      const msg = errMessages[errParam] || 'Authentication failed. Please try connecting again.'
+      setAuthError(msg)
+      setAuthAnnouncement(msg)
+      window.history.replaceState({}, '', window.location.pathname)
+    } else if (successParam) {
+      setAuthAnnouncement('GitHub account connected successfully.')
+      window.history.replaceState({}, '', window.location.pathname)
+    }
+
+    async function checkSession() {
+      setIsCheckingAuth(true)
+      try {
+        const gh = await getGitHubSession()
+        if (mounted && gh) {
+          setGithubUser(gh)
+          setAuthError(null)
+          addLog(`Authenticated GitHub session detected for @${gh.github_login}.`)
+        }
+      } catch {
+        // Not authenticated
+      } finally {
+        if (mounted) setIsCheckingAuth(false)
+      }
+    }
+
+    checkSession()
+    return () => {
+      mounted = false
+    }
+  }, [])
+
+  const handleConnectGitHub = () => {
+    setAuthError(null)
+    if (isMockMode) {
+      const mockUser = {
+        github_login: 'alexrivera-dev',
+        github_id: 8847291,
+        avatar_url: 'https://avatars.githubusercontent.com/u/8847291?v=4',
+        isMock: true,
+      }
+      setGithubUser(mockUser)
+      setAuthAnnouncement('Connected to demo GitHub account as @alexrivera-dev (Sample data).')
+      addLog('GitHub connected in mock mode: @alexrivera-dev (Sample data).')
+      return
+    }
+
+    setAuthAnnouncement('Redirecting to GitHub authorization...')
+    window.location.href = '/api/v1/auth/github/start'
+  }
+
+  const handleDisconnectGitHub = async () => {
+    if (!githubUser?.isMock) {
+      await logoutGitHubSession()
+    }
+    setGithubUser(null)
+    setAuthError(null)
+    setAuthAnnouncement('GitHub account disconnected.')
+    addLog('GitHub account disconnected.')
+  }
+
   // Prefill from user profile if available
   useEffect(() => {
     if (user?.profile?.targetRole && !targetRole) {
       setTargetRole(user.profile.targetRole)
     }
-    if (user?.profile?.github && !githubUrl) {
-      setGithubUrl(user.profile.github)
-    }
-    if (user?.profile?.leetcode && !leetcodeUrl) {
-      setLeetcodeUrl(user.profile.leetcode)
+    if (user?.profile?.leetcode && (!codingProfiles || !codingProfiles[0]?.value)) {
+      setCodingProfiles([
+        { id: 'cp_0', value: user.profile.leetcode, error: null, parsed: null }
+      ])
     }
     if (user?.profile?.certificates && !certInput) {
       setCertInput(user.profile.certificates)
@@ -262,7 +344,12 @@ export default function Verify() {
     setResumeMode('paste')
     setResumeText(SAMPLE_RESUME_TEXT)
     setEvidenceMode('github')
-    setGithubUrl(SAMPLE_GITHUB_URL)
+    setGithubUser({
+      github_login: 'alexrivera-dev',
+      github_id: 8847291,
+      avatar_url: 'https://avatars.githubusercontent.com/u/8847291?v=4',
+      isMock: true,
+    })
     setTargetRole(SAMPLE_TARGET_ROLE)
     setCertInput('AWS Certified Cloud Practitioner (2023)')
     setConsentAi(true)
@@ -290,10 +377,14 @@ export default function Verify() {
       })
       if (res.ok) {
         const data = await res.json()
-        setExtractedResumeInfo(data)
         if (data.text) {
           setResumeText(data.text)
+          // Supplement with local taxonomy matches if any are present in text
+          const localTaxonomySkills = matchSkillsFromText(data.text).map((t) => t.name)
+          const allSkills = Array.from(new Set([...(data.claimed_skills || []), ...localTaxonomySkills]))
+          data.claimed_skills = allSkills
         }
+        setExtractedResumeInfo(data)
         addLog(`PyMuPDF extraction success: Identified ${data.claimed_skills.length} skills in ${file.name}: ${data.claimed_skills.join(', ')}`)
       } else {
         const err = await res.text()
@@ -316,15 +407,25 @@ export default function Verify() {
         url: r.parsed.canonicalUrl,
       }))
 
+    // Extract any leetcode URL from coding profiles if entered for downstream adapter compatibility
+    const leetcodeProfile = validCodingProfiles.find((p) => p.platform === 'leetcode')
+    const resolvedLeetcodeUrl = leetcodeProfile ? leetcodeProfile.url : ''
+
+    const resolvedGithubUrl =
+      evidenceMode === 'github' && githubUser
+        ? `https://github.com/${githubUser.github_login}`
+        : ''
+
     const formPayload = {
       resumeText: resumeText || extractedResumeInfo?.text || '',
       resumeFile,
       extractedSkills: extractedResumeInfo?.claimed_skills || null,
       extractedSections: extractedResumeInfo?.sections || null,
-      githubUrl: evidenceMode === 'github' ? githubUrl : '',
+      githubUrl: resolvedGithubUrl,
+      githubUser: evidenceMode === 'github' ? githubUser : null,
       zipFile: evidenceMode === 'zip' ? zipFile : null,
       certInput,
-      leetcodeUrl,
+      leetcodeUrl: resolvedLeetcodeUrl,
       targetRole,
       consentAi,
       consentRepo,
@@ -575,7 +676,8 @@ export default function Verify() {
   const intakeValid = validateIntake({
     resumeText,
     resumeFile,
-    githubUrl: evidenceMode === 'github' ? githubUrl : '',
+    githubUser: evidenceMode === 'github' ? githubUser : null,
+    githubUrl: evidenceMode === 'github' && githubUser ? `https://github.com/${githubUser.github_login}` : '',
     zipFile: evidenceMode === 'zip' ? zipFile : null,
     targetRole,
     consentAi,
@@ -773,13 +875,126 @@ export default function Verify() {
                   </div>
 
                   {evidenceMode === 'github' ? (
-                    <input
-                      type="text"
-                      className="form-input"
-                      placeholder="https://github.com/username or github handle"
-                      value={githubUrl}
-                      onChange={(e) => setGithubUrl(e.target.value)}
-                    />
+                    <div style={{ marginTop: '8px' }}>
+                      {githubUser ? (
+                        <div
+                          style={{
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'space-between',
+                            padding: '10px 14px',
+                            background: 'var(--surface-2)',
+                            border: '1px solid var(--line)',
+                            borderRadius: '8px',
+                            minHeight: '44px',
+                            gap: '12px',
+                          }}
+                        >
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flexWrap: 'wrap' }}>
+                            {githubUser.avatar_url && (
+                              <img
+                                src={githubUser.avatar_url}
+                                alt={`Avatar for ${githubUser.github_login}`}
+                                style={{ width: '28px', height: '28px', borderRadius: '50%', flexShrink: 0 }}
+                              />
+                            )}
+                            <span style={{ fontSize: '0.9rem', color: 'var(--ink)', fontWeight: 500 }}>
+                              Connected as @{githubUser.github_login}
+                            </span>
+                            {githubUser.isMock && (
+                              <span
+                                style={{
+                                  fontSize: '0.72rem',
+                                  padding: '2px 6px',
+                                  borderRadius: '4px',
+                                  background: 'var(--surface)',
+                                  color: 'var(--muted)',
+                                  border: '1px solid var(--line)',
+                                }}
+                              >
+                                Sample data
+                              </span>
+                            )}
+                          </div>
+                          <button
+                            type="button"
+                            onClick={handleDisconnectGitHub}
+                            style={{
+                              background: 'none',
+                              border: 'none',
+                              color: 'var(--muted)',
+                              cursor: 'pointer',
+                              textDecoration: 'underline',
+                              fontSize: '0.85rem',
+                              padding: '8px 12px',
+                              minHeight: '44px',
+                              display: 'inline-flex',
+                              alignItems: 'center',
+                            }}
+                            aria-label="Disconnect GitHub account"
+                          >
+                            Disconnect
+                          </button>
+                        </div>
+                      ) : (
+                        <div>
+                          <button
+                            type="button"
+                            className="b g"
+                            onClick={handleConnectGitHub}
+                            disabled={isCheckingAuth}
+                            style={{
+                              minHeight: '44px',
+                              width: '100%',
+                              display: 'inline-flex',
+                              alignItems: 'center',
+                              justifyContent: 'center',
+                              cursor: isCheckingAuth ? 'not-allowed' : 'pointer',
+                            }}
+                          >
+                            {isCheckingAuth ? 'Checking session...' : 'Connect GitHub'}
+                          </button>
+                          {authError && (
+                            <div
+                              style={{
+                                marginTop: '8px',
+                                padding: '8px 12px',
+                                background: 'rgba(239, 68, 68, 0.08)',
+                                border: '1px solid rgba(239, 68, 68, 0.3)',
+                                borderRadius: '6px',
+                                color: 'var(--red, #ef4444)',
+                                fontSize: '0.82rem',
+                                display: 'flex',
+                                alignItems: 'center',
+                                justifyContent: 'space-between',
+                                gap: '8px',
+                              }}
+                              role="alert"
+                            >
+                              <span>{authError}</span>
+                              <button
+                                type="button"
+                                onClick={handleConnectGitHub}
+                                style={{
+                                  background: 'none',
+                                  border: 'none',
+                                  color: 'inherit',
+                                  textDecoration: 'underline',
+                                  cursor: 'pointer',
+                                  fontSize: '0.82rem',
+                                  padding: '4px 8px',
+                                  minHeight: '44px',
+                                  display: 'inline-flex',
+                                  alignItems: 'center',
+                                }}
+                              >
+                                Retry
+                              </button>
+                            </div>
+                          )}
+                        </div>
+                      )}
+                    </div>
                   ) : (
                     <div className="file-input-wrapper">
                       <input
@@ -793,24 +1008,12 @@ export default function Verify() {
                   {formErrors.evidence && <p className="field-error">{formErrors.evidence}</p>}
                 </div>
 
-                {/* Coding Profiles Input */}
+                {/* 3. Coding Profiles Input */}
                 <CodingProfilesField
                   value={codingProfiles}
                   onChange={setCodingProfiles}
+                  label="3. Coding Profiles (Optional)"
                 />
-                <div className="form-group">
-                  <label className="form-label">3. LeetCode Profile URL (Optional)</label>
-                  <input
-                    type="text"
-                    className="form-input"
-                    placeholder="https://leetcode.com/u/username or handle"
-                    value={leetcodeUrl}
-                    onChange={(e) => setLeetcodeUrl(e.target.value)}
-                  />
-                  <span className="form-hint m" style={{ fontSize: '0.8rem', opacity: 0.7, marginTop: 4, display: 'block' }}>
-                    Sample evidence for algorithms &amp; data structures (capped at 60 / Supported).
-                  </span>
-                </div>
 
                 {/* 4. Optional Certificates */}
                 <div className="form-group">
@@ -830,7 +1033,7 @@ export default function Verify() {
                 {/* 5. Target Role */}
                 <div className="form-group">
                   <label className="form-label">
-                    4. Target Role or Job Description <span className="req">*</span>
+                    5. Target Role or Job Description <span className="req">*</span>
                   </label>
                   <input
                     type="text"

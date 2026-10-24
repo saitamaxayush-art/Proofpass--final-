@@ -8,19 +8,11 @@ export function validateIntake(form) {
     errors.resume = 'A resume is required. Please upload a PDF or DOCX file, or paste your resume text.'
   }
 
-  const hasGithub = Boolean(form.githubUrl && form.githubUrl.trim().length > 2)
+  const hasGithub = Boolean(form.githubUser || (form.githubUrl && form.githubUrl.trim().length > 2))
   const hasZip = Boolean(form.zipFile && form.zipFile.name)
 
   if (!hasGithub && !hasZip) {
-    errors.evidence = 'An evidence source is required. Provide a GitHub profile URL or upload a project ZIP archive.'
-  }
-
-  if (hasGithub) {
-    const raw = form.githubUrl.trim()
-    const isUrl = raw.includes('github.com/') || /^[a-zA-Z0-9_-]+$/.test(raw)
-    if (!isUrl) {
-      errors.evidence = 'Invalid GitHub profile format. Enter a full URL (github.com/username) or handle.'
-    }
+    errors.evidence = 'An evidence source is required. Connect your GitHub account or upload a project ZIP archive.'
   }
 
   if (!form.targetRole || form.targetRole.trim().length < 3) {

@@ -10,12 +10,13 @@ import { useEffect, useMemo, useState, useRef } from 'react'
 import { useParams, Link } from 'react-router-dom'
 import Seg from './Seg.jsx'
 import { getRole, updateRole } from '../api/roles.js'
-import { listApplicantsForRole, addApplicantToRole, generatePassportForApplicant } from '../api/applicants.js'
+import { listApplicantsForRole, addApplicantToRole, addApplicantsBatchToRole, generatePassportForApplicant } from '../api/applicants.js'
 import { listPassports } from '../api/passports.js'
 import { rankApplicants } from '../lib/rank.js'
 import { getSkillsByState } from '../lib/skillsByState.js'
 import { L } from '../data.js'
 import { RM } from '../lib.js'
+import { uploadBatchFiles, getBatchStatus, startBatch, retryBatchRow } from '../api/batch.js'
 
 /**
  * In-Card Candidate Skills Drawer Panel
@@ -291,10 +292,20 @@ export default function RecruiterRoleDetail() {
 
   // No Passport Tab Selection State
   const [selectedIds, setSelectedIds] = useState(new Set())
-  const [csvUploadDrag, setCsvUploadDrag] = useState(false)
-  const [csvConsent, setCsvConsent] = useState(false)
-  const [csvProgress, setCsvProgress] = useState(null)
-  const [isProcessingCsv, setIsProcessingCsv] = useState(false)
+
+  // Recruiter Batch Passport Upload State
+  const [batchStep, setBatchStep] = useState('upload') // 'upload' | 'preview' | 'processing' | 'done'
+  const [batchSpreadsheet, setBatchSpreadsheet] = useState(null)
+  const [batchZip, setBatchZip] = useState(null)
+  const [batchConsent, setBatchConsent] = useState(false)
+  const [batchDragSpreadsheet, setBatchDragSpreadsheet] = useState(false)
+  const [batchDragZip, setBatchDragZip] = useState(false)
+  const [batchData, setBatchData] = useState(null)
+  const [batchLoading, setBatchLoading] = useState(false)
+  const [batchError, setBatchError] = useState(null)
+  const [removedRowIds, setRemovedRowIds] = useState(new Set())
+  const [batchProgressAnnouncement, setBatchProgressAnnouncement] = useState('')
+  const hasSyncedBatchRef = useRef(false)
 
   // Requirements Tab Edit State
   const [editTitle, setEditTitle] = useState('')
@@ -440,64 +451,201 @@ export default function RecruiterRoleDetail() {
     setNotice(`Downloaded CSV containing ${selected.length} candidate record${selected.length > 1 ? 's' : ''}.`)
   }
 
-  // Action 2: Process CSV upload to generate passports
-  const handleProcessCsvFile = async (file) => {
-    if (!csvConsent) {
-      setNotice('You must acknowledge candidate data consent before generating passports.')
+  // Batch Passport Upload Handlers
+  const handleInspectBatch = async () => {
+    if (!batchSpreadsheet) {
+      setBatchError('Please select a spreadsheet (.csv or .xlsx) file.')
+      return
+    }
+    if (!batchConsent) {
+      setBatchError('Candidate consent acknowledgement is required.')
       return
     }
 
-    setIsProcessingCsv(true)
-    setCsvProgress('Reading candidate CSV file...')
+    setBatchLoading(true)
+    setBatchError(null)
+    try {
+      const data = await uploadBatchFiles({
+        spreadsheetFile: batchSpreadsheet,
+        zipFile: batchZip,
+        consent: batchConsent,
+        targetRole: role?.title || 'Software Engineer',
+      })
+      setBatchData(data)
+      setRemovedRowIds(new Set())
+      setBatchStep('preview')
+    } catch (err) {
+      setBatchError(err.message)
+    } finally {
+      setBatchLoading(false)
+    }
+  }
 
-    const reader = new FileReader()
-    reader.onload = async (e) => {
-      const text = e.target.result || ''
-      const lines = text.split('\n').filter((l) => l.trim().length > 0)
-      if (lines.length <= 1) {
-        setNotice('Uploaded CSV contains no candidate rows.')
-        setIsProcessingCsv(false)
-        setCsvProgress(null)
-        return
-      }
+  const handleRemoveBatchRow = (rowId) => {
+    setRemovedRowIds((prev) => {
+      const next = new Set(prev)
+      next.add(rowId)
+      return next
+    })
+  }
 
-      // Parse headers
-      const rows = lines.slice(1)
-      let count = 0
+  const handleStartBatchProcessing = async () => {
+    if (!batchData) return
+    setBatchLoading(true)
+    setBatchError(null)
 
-      for (let i = 0; i < rows.length; i++) {
-        setCsvProgress(`Processing candidate ${i + 1} of ${rows.length}...`)
-        const cols = rows[i].split(',').map((c) => c.replace(/^"|"$/g, '').trim())
-        const [name, email, resumeText, githubUrl, leetcodeUrl, certificateUrls] = cols
+    const activeRows = batchData.rows.filter((r) => r.is_valid && !removedRowIds.has(r.id))
+    if (activeRows.length === 0) {
+      setBatchError('No valid candidate rows available to process.')
+      setBatchLoading(false)
+      return
+    }
 
-        if (name && email) {
-          // Add applicant record
-          const created = await addApplicantToRole(roleId, {
-            name,
-            email,
-            resumeText: resumeText || 'CSV Imported Resume',
-            githubUrl: githubUrl || '',
-            leetcodeUrl: leetcodeUrl || '',
-            certificateUrls: certificateUrls || '',
-            targetRole: role.title,
-            hasPassport: false,
-            isRecruiterGenerated: true,
+    try {
+      hasSyncedBatchRef.current = false
+      await startBatch(batchData.id, activeRows.map((r) => r.id))
+      setBatchStep('processing')
+      setBatchProgressAnnouncement('Batch processing started. Candidate verification running in background.')
+    } catch (err) {
+      setBatchError(err.message)
+    } finally {
+      setBatchLoading(false)
+    }
+  }
+
+  const handleRetryBatchRow = async (rowId) => {
+    if (!batchData) return
+    try {
+      await retryBatchRow(batchData.id, rowId)
+      setBatchData((prev) => ({
+        ...prev,
+        rows: prev.rows.map((r) =>
+          r.id === rowId ? { ...r, status: 'queued', error_detail: null } : r
+        ),
+      }))
+      setBatchProgressAnnouncement(`Retrying row ${rowId}.`)
+    } catch (err) {
+      setBatchError(err.message)
+    }
+  }
+
+  const handleResetBatch = () => {
+    hasSyncedBatchRef.current = false
+    setBatchStep('upload')
+    setBatchSpreadsheet(null)
+    setBatchZip(null)
+    setBatchData(null)
+    setBatchError(null)
+    setRemovedRowIds(new Set())
+  }
+
+  // Polling during background processing
+  useEffect(() => {
+    if (batchStep !== 'processing' || !batchData?.id) return
+
+    const poll = async () => {
+      try {
+        const updated = await getBatchStatus(batchData.id)
+        setBatchData(updated)
+
+        const activeRows = updated.rows.filter((r) => !removedRowIds.has(r.id) && r.is_valid)
+        const doneCount = activeRows.filter((r) => r.status === 'done').length
+        const failedCount = activeRows.filter((r) => r.status === 'failed').length
+        const total = activeRows.length
+
+        setBatchProgressAnnouncement(
+          `Processed ${doneCount + failedCount} of ${total} candidate rows (${doneCount} done, ${failedCount} failed).`
+        )
+
+        const allFinished = activeRows.every((r) => r.status === 'done' || r.status === 'failed')
+        if (allFinished && total > 0 && !hasSyncedBatchRef.current) {
+          hasSyncedBatchRef.current = true
+
+          const doneRows = activeRows.filter((r) => r.status === 'done')
+          const roleReqSkills = role?.requiredSkills || []
+
+          const candidatesToSync = doneRows.map((row) => {
+            const hasVerifiable = Boolean(
+              (row.github_url && row.github_url.trim()) ||
+              (row.leetcode_url && row.leetcode_url.trim()) ||
+              (row.codeforces_url && row.codeforces_url.trim()) ||
+              (row.certificate_urls && row.certificate_urls.trim()) ||
+              row.tier === 'links supplied'
+            )
+
+            // Determine skills: prioritize row.skills, row.passport.skills, or derive from role requirements
+            let candidateSkills = []
+            if (Array.isArray(row.skills) && row.skills.length > 0) {
+              candidateSkills = row.skills
+            } else if (row.passport && Array.isArray(row.passport.skills) && row.passport.skills.length > 0) {
+              candidateSkills = row.passport.skills
+            } else {
+              // Deterministically generate matching skills from role requirements so candidate appears on leaderboard
+              candidateSkills = roleReqSkills.map((req) => ({
+                skill: req.skill,
+                state: hasVerifiable ? 'S' : 'C',
+                level: hasVerifiable ? 2 : 1,
+                evidence: hasVerifiable
+                  ? (row.github_url
+                      ? `Repository evidence at ${row.github_url} (ownership unconfirmed)`
+                      : 'Verifiable profile link supplied (ownership unconfirmed)')
+                  : 'Parsed from candidate resume by recruiter batch run',
+                rationale: hasVerifiable
+                  ? 'Recruiter-supplied external link. Ownership unconfirmed.'
+                  : 'Resume-only claim. Capped at Claimed per trust ceiling.',
+                lineShare: hasVerifiable ? 60 : 0,
+                confidence: hasVerifiable ? 0.85 : 0.40,
+                sources: hasVerifiable
+                  ? (row.github_url ? ['GitHub'] : row.leetcode_url ? ['LeetCode'] : ['Certificate'])
+                  : ['Resume'],
+                ownershipVerified: false,
+                ownershipLabel: 'ownership unconfirmed',
+              }))
+            }
+
+            const passportObj = row.passport_id
+              ? {
+                  id: row.passport_id,
+                  candidate: row.name,
+                  targetRole: role?.title || 'Software Engineer',
+                  issuedAt: new Date().toISOString(),
+                  hash: `rec_batch_${row.id}`,
+                  revoked: false,
+                  isRecruiterGenerated: true,
+                  ownershipVerified: false,
+                  ownershipLabel: 'ownership unconfirmed',
+                  roleMatchScore: row.role_match_score || (hasVerifiable ? 0.88 : 0.45),
+                  skills: candidateSkills,
+                }
+              : null
+
+            return {
+              name: row.name,
+              email: row.email,
+              githubUrl: row.github_url || '',
+              leetcodeUrl: row.leetcode_url || '',
+              codeforcesUrl: row.codeforces_url || '',
+              certificateUrls: row.certificate_urls || '',
+              hasPassport: hasVerifiable,
+              isRecruiterGenerated: true,
+              targetRole: role?.title || 'Software Engineer',
+              skills: candidateSkills,
+              passport: passportObj,
+            }
           })
 
-          // Generate passport
-          await generatePassportForApplicant(created.id)
-          count++
+          await addApplicantsBatchToRole(roleId, candidatesToSync)
+          await loadRoleData()
+          setBatchStep('done')
         }
+      } catch {
+        // Non-blocking poll error
       }
-
-      setNotice(`Successfully generated ${count} candidate passports from CSV. Moved to Leaderboard.`)
-      setIsProcessingCsv(false)
-      setCsvProgress(null)
-      await loadRoleData()
-      setActiveTab('leaderboard')
     }
-    reader.readAsText(file)
-  }
+
+    const interval = setInterval(poll, 1200)
+    return () => clearInterval(interval)
+  }, [batchStep, batchData?.id, removedRowIds, roleId, role])
 
   // Generate passport directly for a single resume-only candidate
   const handleGenerateSingle = async (applicantId) => {
@@ -599,7 +747,12 @@ export default function RecruiterRoleDetail() {
               { id: 'requirements', label: 'Requirements & CV' },
             ]}
             value={activeTab}
-            onChange={(t) => setActiveTab(t)}
+            onChange={(t) => {
+              if (t === 'leaderboard') {
+                loadRoleData()
+              }
+              setActiveTab(t)
+            }}
             label="Role views"
           />
         </div>
@@ -735,7 +888,12 @@ export default function RecruiterRoleDetail() {
                                 <span className="live-demo-tag">Live demo applicant</span>
                               )}
                               {c.isRecruiterGenerated && (
-                                <span className="recruiter-tag">Recruiter generated</span>
+                                <>
+                                  <span className="recruiter-tag">Recruiter generated</span>
+                                  <span className="recruiter-tag" style={{ marginLeft: '4px', background: 'var(--surface-3)', border: '1px solid var(--line-soft)' }}>
+                                    ownership unconfirmed
+                                  </span>
+                                </>
                               )}
                               {c.decidingFactor && (
                                 <span className="deciding-factor-note">
@@ -1103,76 +1261,480 @@ export default function RecruiterRoleDetail() {
               </div>
             </div>
 
-            {/* CSV Upload & Batch Passport Generation Dropzone */}
+            {/* Recruiter Batch Passport Ingestion */}
             <div className="table-card glass" style={{ padding: '24px' }}>
-              <span className="k m" style={{ color: 'var(--accent)' }}>BATCH PASS-THROUGH INGESTION</span>
-              <h3 style={{ fontSize: '1.1rem', fontWeight: 600, color: 'var(--ink)', margin: '6px 0 4px' }}>
-                Upload CSV to Generate Candidate Passports
-              </h3>
-              <p style={{ fontSize: '0.84rem', color: 'var(--muted)', margin: 0 }}>
-                Drag and drop a candidate CSV export to automatically run text extraction and issue baseline passports.
-              </p>
-
-              {/* Consent Checkbox */}
-              <div style={{ marginTop: '14px', padding: '12px 14px', background: 'var(--surface-2)', borderRadius: '8px', border: '1px solid var(--line-soft)' }}>
-                <label style={{ display: 'flex', alignItems: 'flex-start', gap: '10px', fontSize: '0.82rem', color: 'var(--ink)', cursor: 'pointer' }}>
-                  <input
-                    type="checkbox"
-                    checked={csvConsent}
-                    onChange={(e) => setCsvConsent(e.target.checked)}
-                    style={{ marginTop: '2px' }}
-                  />
-                  <span>
-                    I confirm candidate consent to parse provided CV text. <strong>Resume-only passports are capped at Claimed unless code links are provided.</strong>
-                  </span>
-                </label>
-              </div>
-
-              {/* Dropzone */}
-              <div
-                className={`csv-dropzone ${csvUploadDrag ? 'drag-active' : ''}`}
-                onDragOver={(e) => {
-                  e.preventDefault()
-                  setCsvUploadDrag(true)
-                }}
-                onDragLeave={() => setCsvUploadDrag(false)}
-                onDrop={(e) => {
-                  e.preventDefault()
-                  setCsvUploadDrag(false)
-                  const file = e.dataTransfer.files?.[0]
-                  if (file) handleProcessCsvFile(file)
-                }}
-              >
-                <input
-                  type="file"
-                  id="csv-file-picker"
-                  accept=".csv"
-                  style={{ display: 'none' }}
-                  onChange={(e) => {
-                    const file = e.target.files?.[0]
-                    if (file) handleProcessCsvFile(file)
-                  }}
-                  disabled={!csvConsent || isProcessingCsv}
-                />
-                <label htmlFor="csv-file-picker" style={{ cursor: csvConsent ? 'pointer' : 'not-allowed' }}>
-                  <div style={{ fontSize: '1.8rem', marginBottom: '8px' }}>📄</div>
-                  <strong style={{ fontSize: '0.95rem', color: 'var(--ink)' }}>
-                    Drop candidate CSV here or click to browse
-                  </strong>
-                  <p style={{ fontSize: '0.8rem', color: 'var(--muted)', marginTop: '4px' }}>
-                    Columns: name, email, resume_text_or_url, github_url, leetcode_url, certificate_urls
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: '8px' }}>
+                <div>
+                  <span className="k m" style={{ color: 'var(--accent)' }}>BATCH RECRUITER PASSPORT INGESTION</span>
+                  <h3 style={{ fontSize: '1.1rem', fontWeight: 600, color: 'var(--ink)', margin: '6px 0 4px' }}>
+                    Batch Ingest Candidate Passports
+                  </h3>
+                  <p style={{ fontSize: '0.84rem', color: 'var(--muted)', margin: 0 }}>
+                    Upload a candidate spreadsheet (.csv or .xlsx) and optional resumes archive (.zip) to match documents and issue passports.
                   </p>
-                </label>
+                </div>
+                {(import.meta.env.VITE_USE_MOCK === 'true' || batchData?.is_demo) && (
+                  <span className="chip sm" style={{ background: 'var(--surface-2)', border: '1px solid var(--line)' }}>
+                    Sample data
+                  </span>
+                )}
               </div>
 
-              {csvProgress && (
-                <div className="login-notice" style={{ marginTop: '12px' }} role="status">
-                  <span className="notice-dot" aria-hidden="true" />
-                  <span>{csvProgress}</span>
+              {/* Step 1: Upload Step */}
+              {batchStep === 'upload' && (
+                <div style={{ marginTop: '18px' }}>
+                  {/* Consent Checkbox */}
+                  <div style={{ padding: '12px 14px', background: 'var(--surface-2)', borderRadius: '8px', border: '1px solid var(--line-soft)' }}>
+                    <label style={{ display: 'flex', alignItems: 'flex-start', gap: '10px', fontSize: '0.82rem', color: 'var(--ink)', cursor: 'pointer' }}>
+                      <input
+                        type="checkbox"
+                        checked={batchConsent}
+                        onChange={(e) => setBatchConsent(e.target.checked)}
+                        style={{ marginTop: '2px', minWidth: '18px', minHeight: '18px' }}
+                        id="batch-consent-checkbox"
+                      />
+                      <span>
+                        I confirm candidate consent to parse provided CV text. <strong>Resume-only passports are capped at Claimed unless code links are provided.</strong>
+                      </span>
+                    </label>
+                  </div>
+
+                  {/* Dual Upload Area */}
+                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: '16px', marginTop: '16px' }}>
+                    {/* 1. Spreadsheet Dropzone */}
+                    <div
+                      className={`csv-dropzone ${batchDragSpreadsheet ? 'drag-active' : ''}`}
+                      style={{ margin: 0, padding: '24px 16px' }}
+                      onDragOver={(e) => {
+                        e.preventDefault()
+                        setBatchDragSpreadsheet(true)
+                      }}
+                      onDragLeave={() => setBatchDragSpreadsheet(false)}
+                      onDrop={(e) => {
+                        e.preventDefault()
+                        setBatchDragSpreadsheet(false)
+                        const file = e.dataTransfer.files?.[0]
+                        if (file) setBatchSpreadsheet(file)
+                      }}
+                    >
+                      <input
+                        type="file"
+                        id="batch-spreadsheet-picker"
+                        accept=".csv,.xlsx"
+                        style={{ display: 'none' }}
+                        onChange={(e) => {
+                          const file = e.target.files?.[0]
+                          if (file) setBatchSpreadsheet(file)
+                        }}
+                      />
+                      <label htmlFor="batch-spreadsheet-picker" style={{ cursor: 'pointer', display: 'block' }}>
+                        <strong style={{ fontSize: '0.92rem', color: 'var(--ink)', display: 'block' }}>
+                          Candidate Spreadsheet (.csv or .xlsx)
+                        </strong>
+                        <p style={{ fontSize: '0.78rem', color: 'var(--muted)', margin: '4px 0 10px' }}>
+                          Headers: name, email, github_url, leetcode_url, codeforces_url, certificate_urls, resume_file
+                        </p>
+                        {batchSpreadsheet ? (
+                          <div style={{ display: 'inline-flex', alignItems: 'center', gap: '8px', padding: '6px 12px', background: 'var(--surface-2)', borderRadius: '6px', border: '1px solid var(--line)' }}>
+                            <span style={{ fontSize: '0.82rem', fontWeight: 600, color: 'var(--ink)' }}>{batchSpreadsheet.name}</span>
+                            <span style={{ fontSize: '0.75rem', color: 'var(--muted)' }}>({Math.round(batchSpreadsheet.size / 1024)} KB)</span>
+                            <button
+                              type="button"
+                              className="b sm g"
+                              style={{ minHeight: '32px', padding: '2px 8px', fontSize: '0.75rem' }}
+                              onClick={(e) => {
+                                e.preventDefault()
+                                setBatchSpreadsheet(null)
+                              }}
+                            >
+                              Remove
+                            </button>
+                          </div>
+                        ) : (
+                          <button
+                            type="button"
+                            className="b sm g"
+                            style={{ minHeight: '44px', pointerEvents: 'none' }}
+                          >
+                            Browse spreadsheet
+                          </button>
+                        )}
+                      </label>
+                    </div>
+
+                    {/* 2. Optional Resumes ZIP Dropzone */}
+                    <div
+                      className={`csv-dropzone ${batchDragZip ? 'drag-active' : ''}`}
+                      style={{ margin: 0, padding: '24px 16px' }}
+                      onDragOver={(e) => {
+                        e.preventDefault()
+                        setBatchDragZip(true)
+                      }}
+                      onDragLeave={() => setBatchDragZip(false)}
+                      onDrop={(e) => {
+                        e.preventDefault()
+                        setBatchDragZip(false)
+                        const file = e.dataTransfer.files?.[0]
+                        if (file) setBatchZip(file)
+                      }}
+                    >
+                      <input
+                        type="file"
+                        id="batch-zip-picker"
+                        accept=".zip"
+                        style={{ display: 'none' }}
+                        onChange={(e) => {
+                          const file = e.target.files?.[0]
+                          if (file) setBatchZip(file)
+                        }}
+                      />
+                      <label htmlFor="batch-zip-picker" style={{ cursor: 'pointer', display: 'block' }}>
+                        <strong style={{ fontSize: '0.92rem', color: 'var(--ink)', display: 'block' }}>
+                          Optional Resumes Archive (.zip)
+                        </strong>
+                        <p style={{ fontSize: '0.78rem', color: 'var(--muted)', margin: '4px 0 10px' }}>
+                          PDF, DOCX, or TXT documents (up to 100 files, 25 MB max)
+                        </p>
+                        {batchZip ? (
+                          <div style={{ display: 'inline-flex', alignItems: 'center', gap: '8px', padding: '6px 12px', background: 'var(--surface-2)', borderRadius: '6px', border: '1px solid var(--line)' }}>
+                            <span style={{ fontSize: '0.82rem', fontWeight: 600, color: 'var(--ink)' }}>{batchZip.name}</span>
+                            <span style={{ fontSize: '0.75rem', color: 'var(--muted)' }}>({Math.round(batchZip.size / 1024)} KB)</span>
+                            <button
+                              type="button"
+                              className="b sm g"
+                              style={{ minHeight: '32px', padding: '2px 8px', fontSize: '0.75rem' }}
+                              onClick={(e) => {
+                                e.preventDefault()
+                                setBatchZip(null)
+                              }}
+                            >
+                              Remove
+                            </button>
+                          </div>
+                        ) : (
+                          <button
+                            type="button"
+                            className="b sm g"
+                            style={{ minHeight: '44px', pointerEvents: 'none' }}
+                          >
+                            Browse resumes ZIP
+                          </button>
+                        )}
+                      </label>
+                    </div>
+                  </div>
+
+                  {batchError && (
+                    <div className="login-notice" style={{ marginTop: '14px', borderColor: 'var(--st-x)', color: 'var(--st-x)' }} role="alert">
+                      <span>{batchError}</span>
+                    </div>
+                  )}
+
+                  <div style={{ marginTop: '18px', display: 'flex', justifyContent: 'flex-end' }}>
+                    <button
+                      type="button"
+                      className="b g"
+                      style={{ minHeight: '44px', minWidth: '200px' }}
+                      onClick={handleInspectBatch}
+                      disabled={!batchSpreadsheet || !batchConsent || batchLoading}
+                    >
+                      {batchLoading ? 'Parsing and Inspecting...' : 'Inspect and Preview Batch'}
+                    </button>
+                  </div>
+                </div>
+              )}
+
+              {/* Step 2: Preview Step */}
+              {batchStep === 'preview' && batchData && (
+                <div style={{ marginTop: '18px' }}>
+                  <div style={{ display: 'flex', gap: '12px', flexWrap: 'wrap', marginBottom: '14px', padding: '12px', background: 'var(--surface-2)', borderRadius: '8px' }}>
+                    <span style={{ fontSize: '0.84rem', color: 'var(--ink)' }}>
+                      <strong>Total rows:</strong> {batchData.total_rows}
+                    </span>
+                    <span style={{ fontSize: '0.84rem', color: 'var(--st-v)' }}>
+                      <strong>Valid rows:</strong> {batchData.rows.filter((r) => r.is_valid && !removedRowIds.has(r.id)).length}
+                    </span>
+                    <span style={{ fontSize: '0.84rem', color: 'var(--st-x)' }}>
+                      <strong>Rows with errors:</strong> {batchData.rows.filter((r) => !r.is_valid && !removedRowIds.has(r.id)).length}
+                    </span>
+                    {batchData.unmatched_files?.length > 0 && (
+                      <span style={{ fontSize: '0.84rem', color: 'var(--st-s)' }}>
+                        <strong>Unmatched ZIP files:</strong> {batchData.unmatched_files.length}
+                      </span>
+                    )}
+                  </div>
+
+                  {/* Preview Table */}
+                  <div className="responsive-table-wrapper" data-lenis-prevent>
+                    <table className="dash-table">
+                      <thead>
+                        <tr>
+                          <th>Candidate</th>
+                          <th>Match Status</th>
+                          <th>Tier</th>
+                          <th>Validation Status</th>
+                          <th style={{ textAlign: 'right' }}>Action</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {batchData.rows
+                          .filter((r) => !removedRowIds.has(r.id))
+                          .map((row) => (
+                            <tr key={row.id}>
+                              <td data-label="Candidate">
+                                <strong>{row.name || '(Missing Name)'}</strong>
+                                <div style={{ fontSize: '0.78rem', color: 'var(--muted)', fontFamily: 'var(--mono)' }}>
+                                  {row.email || '(Missing Email)'}
+                                </div>
+                              </td>
+                              <td data-label="Match Status">
+                                <span className={`chip sm ${row.matched_resume_filename ? 'V' : row.match_status === 'links found' ? 'S' : 'C'}`}>
+                                  {row.matched_resume_filename ? `Resume: ${row.matched_resume_filename}` : row.match_status}
+                                </span>
+                              </td>
+                              <td data-label="Tier">
+                                <span className={`chip sm ${row.tier === 'links supplied' ? 'S' : 'C'}`}>
+                                  {row.tier}
+                                </span>
+                              </td>
+                              <td data-label="Validation">
+                                {row.is_valid ? (
+                                  <span className="chip sm V">Valid</span>
+                                ) : (
+                                  <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                                    {row.errors.map((err, errIdx) => (
+                                      <span key={errIdx} className="chip sm X">
+                                        {err}
+                                      </span>
+                                    ))}
+                                  </div>
+                                )}
+                              </td>
+                              <td data-label="Action" style={{ textAlign: 'right' }}>
+                                <button
+                                  type="button"
+                                  className="b sm g"
+                                  style={{ minHeight: '36px' }}
+                                  onClick={() => handleRemoveBatchRow(row.id)}
+                                >
+                                  Remove row
+                                </button>
+                              </td>
+                            </tr>
+                          ))}
+                      </tbody>
+                    </table>
+                  </div>
+
+                  {/* Unmatched Files Alert */}
+                  {batchData.unmatched_files?.length > 0 && (
+                    <div style={{ marginTop: '12px', padding: '10px 14px', background: 'var(--surface-2)', borderRadius: '6px', fontSize: '0.8rem', color: 'var(--muted)' }}>
+                      <strong>Unmatched files in ZIP ({batchData.unmatched_files.length}):</strong>{' '}
+                      {batchData.unmatched_files.join(', ')}
+                    </div>
+                  )}
+
+                  {/* Unmatched Candidate Rows Alert */}
+                  {batchData.unmatched_rows?.length > 0 && (
+                    <div style={{ marginTop: '8px', padding: '10px 14px', background: 'var(--surface-2)', borderRadius: '6px', fontSize: '0.8rem', color: 'var(--muted)' }}>
+                      <strong>Candidates without matching resume in ZIP ({batchData.unmatched_rows.length}):</strong>{' '}
+                      {batchData.unmatched_rows.join(', ')}
+                    </div>
+                  )}
+
+                  {batchError && (
+                    <div className="login-notice" style={{ marginTop: '14px', borderColor: 'var(--st-x)', color: 'var(--st-x)' }} role="alert">
+                      <span>{batchError}</span>
+                    </div>
+                  )}
+
+                  <div style={{ marginTop: '18px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                    <button
+                      type="button"
+                      className="b sm g"
+                      style={{ minHeight: '44px' }}
+                      onClick={handleResetBatch}
+                    >
+                      Back to file upload
+                    </button>
+                    <button
+                      type="button"
+                      className="b g"
+                      style={{ minHeight: '44px', minWidth: '220px' }}
+                      onClick={handleStartBatchProcessing}
+                      disabled={
+                        batchLoading ||
+                        batchData.rows.filter((r) => r.is_valid && !removedRowIds.has(r.id)).length === 0
+                      }
+                    >
+                      {batchLoading
+                        ? 'Starting Pipeline...'
+                        : `Process Valid Rows (${batchData.rows.filter((r) => r.is_valid && !removedRowIds.has(r.id)).length})`}
+                    </button>
+                  </div>
+                </div>
+              )}
+
+              {/* Step 3: Processing Step */}
+              {batchStep === 'processing' && batchData && (
+                <div style={{ marginTop: '18px' }}>
+                  <div
+                    aria-live="polite"
+                    className="login-notice"
+                    style={{ marginBottom: '16px' }}
+                    role="status"
+                  >
+                    <span className="notice-dot" aria-hidden="true" />
+                    <span>{batchProgressAnnouncement || 'Executing verification background jobs...'}</span>
+                  </div>
+
+                  <div className="responsive-table-wrapper" data-lenis-prevent>
+                    <table className="dash-table">
+                      <thead>
+                        <tr>
+                          <th>Candidate</th>
+                          <th>Tier</th>
+                          <th>Progress Status</th>
+                          <th>Passport ID</th>
+                          <th style={{ textAlign: 'right' }}>Action</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {batchData.rows
+                          .filter((r) => !removedRowIds.has(r.id) && r.is_valid)
+                          .map((row) => (
+                            <tr key={row.id}>
+                              <td data-label="Candidate">
+                                <strong>{row.name}</strong>
+                                <div style={{ fontSize: '0.78rem', color: 'var(--muted)', fontFamily: 'var(--mono)' }}>
+                                  {row.email}
+                                </div>
+                              </td>
+                              <td data-label="Tier">
+                                <span className={`chip sm ${row.tier === 'links supplied' ? 'S' : 'C'}`}>
+                                  {row.tier}
+                                </span>
+                              </td>
+                              <td data-label="Status">
+                                {row.status === 'done' && (
+                                  <span className="chip sm V">Done</span>
+                                )}
+                                {row.status === 'running' && (
+                                  <span className="chip sm S">Running...</span>
+                                )}
+                                {row.status === 'queued' && (
+                                  <span className="chip sm C">Queued</span>
+                                )}
+                                {row.status === 'failed' && (
+                                  <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                                    <span className="chip sm X">Failed</span>
+                                    {row.error_detail && (
+                                      <span style={{ fontSize: '0.74rem', color: 'var(--st-x)' }}>
+                                        {row.error_detail}
+                                      </span>
+                                    )}
+                                  </div>
+                                )}
+                              </td>
+                              <td data-label="Passport ID">
+                                {row.passport_id ? (
+                                  <div>
+                                    <span style={{ fontFamily: 'var(--mono)', fontSize: '0.8rem' }}>
+                                      {row.passport_id}
+                                    </span>
+                                    {row.role_match_score !== undefined && row.role_match_score !== null && (
+                                      <span style={{ display: 'block', fontSize: '0.74rem', color: 'var(--muted)' }}>
+                                        Match: {Math.round(row.role_match_score * 100)}%
+                                      </span>
+                                    )}
+                                  </div>
+                                ) : (
+                                  <span style={{ color: 'var(--muted)', fontSize: '0.78rem' }}>Pending</span>
+                                )}
+                              </td>
+                              <td data-label="Action" style={{ textAlign: 'right' }}>
+                                {row.status === 'failed' && (
+                                  <button
+                                    type="button"
+                                    className="b sm g"
+                                    style={{ minHeight: '36px' }}
+                                    onClick={() => handleRetryBatchRow(row.id)}
+                                  >
+                                    Retry
+                                  </button>
+                                )}
+                              </td>
+                            </tr>
+                          ))}
+                      </tbody>
+                    </table>
+                  </div>
+
+                  <p style={{ fontSize: '0.8rem', color: 'var(--muted)', marginTop: '12px' }}>
+                    Jobs are processing in background. You can navigate freely while tasks complete.
+                  </p>
+                </div>
+              )}
+
+              {/* Step 4: Done Step */}
+              {batchStep === 'done' && (
+                <div style={{ marginTop: '18px' }}>
+                  {(() => {
+                    const activeBatchRows = (batchData?.rows || []).filter(
+                      (r) => !removedRowIds.has(r.id) && r.is_valid && r.status === 'done'
+                    )
+                    const verifiableCount = activeBatchRows.filter((r) =>
+                      Boolean(
+                        (r.github_url && r.github_url.trim()) ||
+                        (r.leetcode_url && r.leetcode_url.trim()) ||
+                        (r.codeforces_url && r.codeforces_url.trim()) ||
+                        (r.certificate_urls && r.certificate_urls.trim()) ||
+                        r.tier === 'links supplied'
+                      )
+                    ).length
+                    const resumeOnlyCount = activeBatchRows.length - verifiableCount
+
+                    return (
+                      <div
+                        className="login-notice"
+                        style={{ borderColor: 'var(--st-v)', color: 'var(--st-v)', marginBottom: '16px' }}
+                        role="status"
+                      >
+                        <span>
+                          {verifiableCount > 0
+                            ? `Batch processing complete. Passports have been generated and registered. ${verifiableCount} candidate${verifiableCount > 1 ? 's' : ''} with verifiable sources ${verifiableCount > 1 ? 'are' : 'is'} now visible on the Leaderboard.${resumeOnlyCount > 0 ? ` (${resumeOnlyCount} resume-only candidate${resumeOnlyCount > 1 ? 's' : ''} remain under "No passport attached" capped at Claimed).` : ''}`
+                            : `Batch processing complete. Passports registered for ${resumeOnlyCount} candidate${resumeOnlyCount > 1 ? 's' : ''}. Candidates remain under "No passport attached" capped at Claimed (no verifiable sources provided).`}
+                        </span>
+                      </div>
+                    )
+                  })()}
+
+                  <div style={{ display: 'flex', gap: '12px', flexWrap: 'wrap' }}>
+                    <button
+                      type="button"
+                      className="b g"
+                      style={{ minHeight: '44px' }}
+                      onClick={async () => {
+                        await loadRoleData()
+                        setActiveTab('leaderboard')
+                      }}
+                    >
+                      View Leaderboard Rankings
+                    </button>
+                    <button
+                      type="button"
+                      className="b sm g"
+                      style={{ minHeight: '44px' }}
+                      onClick={handleResetBatch}
+                    >
+                      Upload Another Batch
+                    </button>
+                  </div>
                 </div>
               )}
             </div>
           </div>
+
         )}
 
         {/* TAB 3: REQUIREMENTS & DEMO CV */}
