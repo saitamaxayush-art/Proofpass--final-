@@ -50,6 +50,15 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+# Mount REST API router and initialize database persistence
+try:
+    from api.routes import router as api_v1_router
+    from database import init_db
+    init_db()
+    app.include_router(api_v1_router)
+except Exception:
+    pass
+
 
 def extract_docx_text(content: bytes) -> str:
     """Extract plain text from a DOCX file using standard library zipfile."""
