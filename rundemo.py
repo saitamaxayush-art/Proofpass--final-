@@ -9,6 +9,12 @@ from pathlib import Path
 # Ensure backend/ is on path
 sys.path.insert(0, str(Path(__file__).resolve().parent / "backend"))
 
+try:
+    import intelligence
+except ModuleNotFoundError:
+    import Intelligence
+    sys.modules["intelligence"] = Intelligence
+
 os.environ.setdefault("INTELLIGENCE_LLM_API_KEY", "")
 os.environ.setdefault("INTELLIGENCE_FALLBACK_TO_MOCK", "true")
 

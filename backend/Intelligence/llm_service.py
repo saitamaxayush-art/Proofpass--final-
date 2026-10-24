@@ -109,10 +109,51 @@ def parse_target_role(jd_text: str, default_role_name: str = "Software Engineer"
         return _mock_target_role(default_role_name) if config.fallback_to_mock else TargetRole(role_name=default_role_name)
 
 
+_MOCK_SKILL_PATTERNS = {
+    "React": [r"\breact(\.js)?\b"],
+    "TypeScript": [r"\btypescript\b", r"\bts\b"],
+    "JavaScript": [r"\bjavascript\b", r"\bjs\b", r"\bes6\b"],
+    "Python": [r"\bpython\b", r"\bpython3\b"],
+    "Node.js": [r"\bnode(\.js)?\b"],
+    "PostgreSQL": [r"\bpostgres(ql)?\b"],
+    "AWS": [r"\baws\b", r"\bamazon\s+web\s+services\b"],
+    "Docker": [r"\bdocker\b", r"\bcontainer(s|ization)?\b"],
+    "Kubernetes": [r"\bkubernetes\b", r"\bk8s\b"],
+    "REST APIs": [r"\brest(ful)?(\s+api(s)?)?\b"],
+    "GraphQL": [r"\bgraphql\b"],
+    "Redis": [r"\bredis\b"],
+    "MongoDB": [r"\bmongodb\b", r"\bmongo\b"],
+    "MySQL": [r"\bmysql\b"],
+    "SQL": [r"\bsql\b"],
+    "Next.js": [r"\bnext(\.js)?\b"],
+    "FastAPI": [r"\bfastapi\b"],
+    "Django": [r"\bdjango\b"],
+    "Flask": [r"\bflask\b"],
+    "Java": [r"\bjava\b"],
+    "C++": [r"\bc\+\+\b", r"\bcpp\b"],
+    "Go": [r"\bgolang\b", r"\bgo\s+language\b"],
+    "Rust": [r"\brust\b"],
+    "Git workflow": [r"\bgit\b", r"\bgithub\b", r"\bgitlab\b"],
+    "CI/CD": [r"\bci\s*/\s*cd\b", r"\bgithub\s+actions\b"],
+    "System design": [r"\bsystem\s+design\b", r"\bmicroservices\b"],
+    "Testing": [r"\bunit\s+test(ing)?\b", r"\bjest\b", r"\bpytest\b", r"\bcypress\b"],
+    "Tailwind": [r"\btailwind(css)?\b"],
+    "Linux": [r"\blinux\b"],
+}
+
+
 def _mock_extract_claims(text: str) -> List[Claim]:
-    keywords = {"React": ["react"], "Python": ["python"], "Node.js": ["node"], "PostgreSQL": ["postgres"], "AWS": ["aws"]}
-    lower = text.lower()
-    return [Claim(skill=k, resume_pointer="mock", repo_hint=None) for k, v in keywords.items() if any(var in lower for var in v)]
+    claims = []
+    for skill, patterns in _MOCK_SKILL_PATTERNS.items():
+        for pat in patterns:
+            match = re.search(pat, text, re.IGNORECASE)
+            if match:
+                start = max(0, match.start() - 20)
+                end = min(len(text), match.end() + 20)
+                pointer = text[start:end].strip().replace("\n", " ")
+                claims.append(Claim(skill=skill, resume_pointer=pointer, repo_hint=None))
+                break
+    return claims
 
 def _mock_target_role(name: str) -> TargetRole:
     return TargetRole(role_name=name, required_skills=[

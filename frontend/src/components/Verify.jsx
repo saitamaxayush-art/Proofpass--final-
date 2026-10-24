@@ -151,6 +151,8 @@ export default function Verify() {
   const [resumeMode, setResumeMode] = useState('paste')
   const [resumeText, setResumeText] = useState('')
   const [resumeFile, setResumeFile] = useState(null)
+  const [isExtractingResume, setIsExtractingResume] = useState(false)
+  const [extractedResumeInfo, setExtractedResumeInfo] = useState(null)
   const [evidenceMode, setEvidenceMode] = useState('github')
   const [githubUrl, setGithubUrl] = useState('')
   const [zipFile, setZipFile] = useState(null)
@@ -217,14 +219,51 @@ export default function Verify() {
     setConsentAi(true)
     setConsentRepo(true)
     setFormErrors({})
+    setExtractedResumeInfo(null)
     addLog('Sample dataset loaded for Alex Rivera: Senior Full Stack TypeScript Engineer.')
+  }
+
+  // Pre-extract resume file via PyMuPDF backend upon upload
+  const handleResumeFileChange = async (file) => {
+    setResumeFile(file)
+    setExtractedResumeInfo(null)
+    if (!file) return
+
+    setIsExtractingResume(true)
+    addLog(`Uploading ${file.name} to ProofPass backend for PyMuPDF text & skill extraction...`)
+
+    try {
+      const formData = new FormData()
+      formData.append('file', file)
+      const res = await fetch('/api/v1/extract-resume', {
+        method: 'POST',
+        body: formData,
+      })
+      if (res.ok) {
+        const data = await res.json()
+        setExtractedResumeInfo(data)
+        if (data.text) {
+          setResumeText(data.text)
+        }
+        addLog(`PyMuPDF extraction success: Identified ${data.claimed_skills.length} skills in ${file.name}: ${data.claimed_skills.join(', ')}`)
+      } else {
+        const err = await res.text()
+        addLog(`Backend notice (${res.status}): ${err}`)
+      }
+    } catch (err) {
+      addLog(`Backend service notice (${err.message}). Step 1 will execute fallback.`)
+    } finally {
+      setIsExtractingResume(false)
+    }
   }
 
   // STEP 0: Start Verification Form Submission
   const handleStartVerification = async () => {
     const formPayload = {
-      resumeText,
+      resumeText: resumeText || extractedResumeInfo?.text || '',
       resumeFile,
+      extractedSkills: extractedResumeInfo?.claimed_skills || null,
+      extractedSections: extractedResumeInfo?.sections || null,
       githubUrl: evidenceMode === 'github' ? githubUrl : '',
       zipFile: evidenceMode === 'zip' ? zipFile : null,
       targetRole,
@@ -587,9 +626,51 @@ export default function Verify() {
                       <input
                         type="file"
                         accept=".pdf,.docx,.txt"
-                        onChange={(e) => setResumeFile(e.target.files[0])}
+                        onChange={(e) => handleResumeFileChange(e.target.files?.[0])}
                       />
-                      {resumeFile && <span className="m file-hint">Selected: {resumeFile.name}</span>}
+                      {isExtractingResume && (
+                        <div className="m file-hint" style={{ color: '#38bdf8', marginTop: '6px' }}>
+                          ⚡ Extracting text & technical skills via PyMuPDF backend...
+                        </div>
+                      )}
+                      {resumeFile && !isExtractingResume && (
+                        <span className="m file-hint" style={{ display: 'block', marginTop: '6px' }}>
+                          Selected: <strong>{resumeFile.name}</strong> ({(resumeFile.size / 1024).toFixed(1)} KB)
+                        </span>
+                      )}
+                      {extractedResumeInfo && !isExtractingResume && (
+                        <div
+                          style={{
+                            marginTop: '10px',
+                            padding: '10px 12px',
+                            background: 'rgba(16, 185, 129, 0.08)',
+                            borderRadius: '8px',
+                            border: '1px solid rgba(16, 185, 129, 0.25)',
+                          }}
+                        >
+                          <div style={{ fontSize: '0.82rem', color: '#10b981', fontWeight: 600, marginBottom: '6px' }}>
+                            ✓ PyMuPDF Extracted: {extractedResumeInfo.char_count.toLocaleString()} chars · {extractedResumeInfo.claimed_skills.length} skills detected
+                          </div>
+                          <div style={{ display: 'flex', flexWrap: 'wrap', gap: '5px' }}>
+                            {extractedResumeInfo.claimed_skills.map((s) => (
+                              <span
+                                key={s}
+                                style={{
+                                  fontSize: '0.75rem',
+                                  padding: '2px 8px',
+                                  borderRadius: '12px',
+                                  background: 'rgba(56, 189, 248, 0.15)',
+                                  color: '#38bdf8',
+                                  border: '1px solid rgba(56, 189, 248, 0.3)',
+                                  fontWeight: 500,
+                                }}
+                              >
+                                {s}
+                              </span>
+                            ))}
+                          </div>
+                        </div>
+                      )}
                     </div>
                   )}
                   {formErrors.resume && <p className="field-error">{formErrors.resume}</p>}
