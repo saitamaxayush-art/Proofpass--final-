@@ -1,0 +1,103 @@
+{
+  "user_info": {
+    "status": "OK",
+    "result": [
+      {
+        "handle": "tourist_mock",
+        "rating": 3600,
+        "maxRating": 3800,
+        "rank": "legendary grandmaster",
+        "maxRank": "legendary grandmaster"
+      }
+    ]
+  },
+  "user_status": {
+    "status": "OK",
+    "result": [
+      {
+        "id": 1001,
+        "contestId": 1800,
+        "creationTimeSeconds": 1670000000,
+        "programmingLanguage": "GNU C++20 (64)",
+        "verdict": "OK",
+        "problem": {
+          "contestId": 1800,
+          "index": "A",
+          "name": "Tree Problem",
+          "rating": 1600,
+          "tags": ["trees", "dp", "data structures"]
+        }
+      },
+      {
+        "id": 1002,
+        "contestId": 1800,
+        "creationTimeSeconds": 1670000100,
+        "programmingLanguage": "GNU C++20 (64)",
+        "verdict": "OK",
+        "problem": {
+          "contestId": 1800,
+          "index": "B",
+          "name": "Graph Problem",
+          "rating": 1900,
+          "tags": ["graphs", "dfs and similar", "shortest paths"]
+        }
+      },
+      {
+        "id": 1003,
+        "contestId": 1800,
+        "creationTimeSeconds": 1670000100,
+        "programmingLanguage": "GNU C++20 (64)",
+        "verdict": "WRONG_ANSWER",
+        "problem": {
+          "contestId": 1800,
+          "index": "B",
+          "name": "Graph Problem",
+          "rating": 1900,
+          "tags": ["graphs"]
+        }
+      },
+      {
+        "id": 1004,
+        "contestId": 1800,
+        "creationTimeSeconds": 1670000200,
+        "programmingLanguage": "Python 3",
+        "verdict": "OK",
+        "problem": {
+          "contestId": 1800,
+          "index": "A",
+          "name": "Tree Problem",
+          "rating": 1600,
+          "tags": ["trees", "dp"]
+        }
+      },
+      {
+        "id": 1005,
+        "contestId": 1801,
+        "creationTimeSeconds": 1670000300,
+        "programmingLanguage": "GNU C++20 (64)",
+        "verdict": "OK",
+        "problem": {
+          "contestId": 1801,
+          "index": "C",
+          "name": "Math & Greedy",
+          "rating": 1500,
+          "tags": ["math", "greedy", "binary search"]
+        }
+      },
+      {
+        "id": 1006,
+        "contestId": 1802,
+        "creationTimeSeconds": 1670000400,
+        "programmingLanguage": "GNU C++20 (64)",
+        "verdict": "OK",
+        "problem": {
+          "contestId": 1802,
+          "index": "D",
+          "name": "Sorting and Strings",
+          "rating": 1700,
+          "tags": ["sortings", "strings"]
+        }
+      }
+    ]
+  }
+}

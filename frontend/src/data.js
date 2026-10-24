@@ -1,5 +1,5 @@
-export const L = { V: 'Verified', S: 'Supported', C: 'Claimed', X: 'Contradicted', U: 'Unchecked' }
-export const Wt = { V: 1, S: 0.6, C: 0.2, X: 0 }
+export const L = { V: 'Verified', S: 'Supported', C: 'Claimed', X: 'Contradicted', U: 'Missing' }
+export const Wt = { V: 1, S: 0.6, C: 0.2, U: 0, X: 0 }
 export const R = { React: 3, TypeScript: 2, 'REST APIs': 2, Testing: 2, Docker: 1, 'System design': 2 }
 
 const k = (n, s, ev, q) => ({ n, s, ev, q })

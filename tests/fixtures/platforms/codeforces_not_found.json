@@ -1,0 +1,10 @@
+{
+  "user_info": {
+    "status": "FAILED",
+    "comment": "handles: User not found"
+  },
+  "user_status": {
+    "status": "FAILED",
+    "comment": "handle: User not found"
+  }
+}

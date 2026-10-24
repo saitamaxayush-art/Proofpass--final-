@@ -35,6 +35,12 @@ export const SKILL_RULES = {
     keywords: ['#include', 'std::', 'nullptr'],
     rationale: 'C++ system components with memory management and header definitions',
   },
+  C: {
+    extensions: ['.c', '.h'],
+    manifests: ['Makefile', 'CMakeLists.txt'],
+    keywords: ['#include', 'printf', 'malloc', 'size_t', 'struct ', 'pointer'],
+    rationale: 'C low-level system code, pointers, memory allocation, and headers',
+  },
   'C#': {
     extensions: ['.cs'],
     manifests: ['.csproj', '.sln'],
@@ -78,10 +84,16 @@ export const SKILL_RULES = {
     rationale: 'Kotlin modern application code and Gradle configurations',
   },
   SQL: {
-    extensions: ['.sql'],
-    manifests: ['schema.sql', 'migrations', 'prisma/schema.prisma'],
-    keywords: ['create table', 'select ', 'insert into', 'alter table', 'database'],
+    extensions: ['.sql', '.sqlite', '.sqlite3', '.db'],
+    manifests: ['schema.sql', 'db.sqlite3', 'migrations', 'prisma/schema.prisma'],
+    keywords: ['create table', 'select ', 'insert into', 'alter table', 'database', 'sqlite'],
     rationale: 'SQL relational database schemas, DDL scripts, and queries',
+  },
+  SQLite: {
+    extensions: ['.sqlite', '.sqlite3', '.db', '.sql'],
+    manifests: ['db.sqlite3', 'database.sqlite', 'database.sqlite3'],
+    keywords: ['sqlite', 'sqlite3', 'db.sqlite3'],
+    rationale: 'SQLite embedded database storage, schema definitions, and migration states',
   },
   'HTML/CSS': {
     extensions: ['.html', '.css', '.scss', '.sass'],
@@ -143,8 +155,8 @@ export const SKILL_RULES = {
   },
   Django: {
     extensions: ['.py'],
-    manifests: ['manage.py', 'settings.py', 'requirements.txt'],
-    keywords: ['django', 'models.Model', 'urlpatterns', 'views.'],
+    manifests: ['manage.py', 'settings.py', 'requirements.txt', 'db.sqlite3'],
+    keywords: ['django', 'models.Model', 'urlpatterns', 'views.', 'sqlite3'],
     rationale: 'Django MVC models, ORM migrations, and view routing architecture',
   },
   Flask: {
@@ -262,6 +274,9 @@ function findRuleForSkill(skillName) {
   if (target === 'py') return { key: 'Python', ...SKILL_RULES.Python }
   if (target === 'js') return { key: 'JavaScript', ...SKILL_RULES.JavaScript }
   if (target === 'ts') return { key: 'TypeScript', ...SKILL_RULES.TypeScript }
+  if (target === 'c') return { key: 'C', ...SKILL_RULES.C }
+  if (target === 'c++' || target === 'cpp') return { key: 'C++', ...SKILL_RULES['C++'] }
+  if (target === 'sqlite' || target === 'sqlite3') return { key: 'SQLite', ...SKILL_RULES.SQLite }
   if (target === 'postgres' || target === 'psql') return { key: 'PostgreSQL', ...SKILL_RULES.PostgreSQL }
   if (target === 'k8s') return { key: 'Kubernetes', ...SKILL_RULES.Kubernetes }
   if (target === 'git') return { key: 'Git workflow', ...SKILL_RULES['Git workflow'] }
@@ -298,28 +313,40 @@ export async function executeStep2Propose(readData, onLog = () => {}) {
     const rule = findRuleForSkill(skill)
 
     if (rule) {
-      // 1. Try matching manifests first
-      if (rule.manifests && rule.manifests.length > 0) {
+      const isPureLanguage = ['Python', 'JavaScript', 'TypeScript', 'Java', 'C++', 'C', 'C#', 'Go', 'Rust', 'PHP', 'Ruby', 'Swift', 'Kotlin'].includes(rule.key)
+
+      // 1. For pure programming languages, ALWAYS require valid source code extensions first!
+      if (isPureLanguage && rule.extensions && rule.extensions.length > 0) {
         matchedFile = files.find((f) =>
-          rule.manifests.some((m) => f.toLowerCase().endsWith(m.toLowerCase()) || f.toLowerCase().includes(m.toLowerCase()))
+          rule.extensions.some((ext) => f.toLowerCase().endsWith(ext.toLowerCase()))
         )
       }
 
-      // 2. Try matching file extensions
+      // 2. Match exact manifests next (e.g. package.json, manage.py, db.sqlite3, Dockerfile, etc.)
+      if (!matchedFile && rule.manifests && rule.manifests.length > 0) {
+        matchedFile = files.find((f) => {
+          const lower = f.toLowerCase()
+          return rule.manifests.some((m) => {
+            const mLower = m.toLowerCase()
+            return lower.endsWith('/' + mLower) || lower.endsWith('\\' + mLower) || lower === mLower
+          })
+        })
+      }
+
+      // 3. For frameworks, databases, or cloud tools, match appropriate file extensions
       if (!matchedFile && rule.extensions && rule.extensions.length > 0) {
         matchedFile = files.find((f) =>
           rule.extensions.some((ext) => f.toLowerCase().endsWith(ext.toLowerCase()))
         )
       }
 
-      // 3. Try matching keywords in path or sample content
+      // 4. Try matching keywords against file content samples (NOT path strings to avoid false positives)
       if (!matchedFile && rule.keywords && rule.keywords.length > 0) {
         matchedFile = files.find((f) => {
-          const pathLower = f.toLowerCase()
-          if (rule.keywords.some((k) => pathLower.includes(k.toLowerCase()))) return true
           const sample = readData.filesIndex[f]?.sample
-          if (sample && rule.keywords.some((k) => sample.toLowerCase().includes(k.toLowerCase()))) return true
-          return false
+          if (!sample) return false
+          const sampleLower = sample.toLowerCase()
+          return rule.keywords.some((k) => sampleLower.includes(k.toLowerCase()))
         })
       }
 

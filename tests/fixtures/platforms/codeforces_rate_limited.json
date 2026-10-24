@@ -1,0 +1,10 @@
+{
+  "user_info": {
+    "status": "FAILED",
+    "comment": "Call limit exceeded"
+  },
+  "user_status": {
+    "status": "FAILED",
+    "comment": "Call limit exceeded"
+  }
+}

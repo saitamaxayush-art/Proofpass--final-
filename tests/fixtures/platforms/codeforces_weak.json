@@ -1,0 +1,47 @@
+{
+  "user_info": {
+    "status": "OK",
+    "result": [
+      {
+        "handle": "weak_coder",
+        "rating": 1150,
+        "maxRating": 1180,
+        "rank": "newbie",
+        "maxRank": "newbie"
+      }
+    ]
+  },
+  "user_status": {
+    "status": "OK",
+    "result": [
+      {
+        "id": 2001,
+        "contestId": 1700,
+        "creationTimeSeconds": 1660000000,
+        "programmingLanguage": "Python 3",
+        "verdict": "OK",
+        "problem": {
+          "contestId": 1700,
+          "index": "A",
+          "name": "Simple Math",
+          "rating": 800,
+          "tags": ["math", "implementation"]
+        }
+      },
+      {
+        "id": 2002,
+        "contestId": 1701,
+        "creationTimeSeconds": 1660000100,
+        "programmingLanguage": "Python 3",
+        "verdict": "OK",
+        "problem": {
+          "contestId": 1701,
+          "index": "A",
+          "name": "Easy String",
+          "rating": 800,
+          "tags": ["strings", "implementation"]
+        }
+      }
+    ]
+  }
+}
