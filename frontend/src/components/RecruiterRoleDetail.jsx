@@ -76,48 +76,35 @@ function CandidateSkillsDrawer({
           : Math.round(skill.confidence)
         : null
 
+    const importanceLabel = skill.importance || 'Extra'
+
     return (
-      <div key={skill.skillId} className="skill-row-card">
-        <div className="skill-row-main">
-          <div className="skill-row-top">
-            <strong className="skill-row-name">{skill.name}</strong>
-            <span className={`chip sm ${skill.state}`} title={`State: ${stateName}`}>
-              {stateName}
-            </span>
-            <span
-              className={`importance-tag ${skill.importance ? skill.importance.toLowerCase() : 'extra'}`}
-            >
-              {skill.importance || 'Extra skill'}
-            </span>
-            {skill.sources && skill.sources.length > 0 && (
-              <div className="skill-sources-wrap">
-                {skill.sources.map((src) => (
-                  <span key={src} className="source-badge">
-                    {src}
-                  </span>
-                ))}
-              </div>
+      <div key={skill.skillId} className="sp-skill-row">
+        <div className="sp-skill-main">
+          <div className="sp-skill-meta-line">
+            <strong className="sp-skill-name">{skill.name}</strong>
+            <span className="sp-importance-word">{importanceLabel}</span>
+            {skill.level !== undefined && (
+              <span className="sp-level-word">Level {skill.level}</span>
             )}
             {confVal !== null && (
-              <span className="confidence-pill" title="Audit evidence confidence">
-                Confidence: {confVal}%
-              </span>
+              <span className="sp-conf-word">Confidence {confVal}%</span>
             )}
           </div>
           {skill.reason && (
-            <div className="skill-reason-line">
-              <span className="reason-label">
+            <div className="sp-reason-line">
+              <span className="sp-reason-label">
                 {skill.state === 'X' ? 'Flag reason: ' : 'Rationale: '}
               </span>
-              <span className="reason-text">{skill.reason}</span>
+              <span className="sp-reason-text">{skill.reason}</span>
             </div>
           )}
         </div>
-        <div className="skill-row-action">
+        <div className="sp-skill-action">
           {candidate.passport && (
             <Link
               to={`/passport/${candidate.passport.id}#${skill.passportAnchor}`}
-              className="b sm g view-evidence-link"
+              className="sp-evidence-link"
             >
               View evidence →
             </Link>
@@ -130,22 +117,20 @@ function CandidateSkillsDrawer({
   return (
     <div
       id={`skills-panel-${candidate.id}`}
-      className="skills-panel-content"
+      className="sp-panel-content"
       role="region"
       aria-label={`${stateName} skills for ${displayedName}`}
     >
-      <div className="skills-panel-header">
-        <div className="skills-panel-title-wrap">
-          <h4 className="skills-panel-heading">
+      <div className="sp-panel-header">
+        <div className="sp-panel-title-wrap">
+          <h4 className="sp-panel-heading">
             {stateName} skills ({skillsInState.length})
           </h4>
-          <span className="skills-panel-sub">
-            for {displayedName}
-          </span>
+          <span className="sp-panel-sub">for {displayedName}</span>
         </div>
         <button
           type="button"
-          className="b sm g panel-close-btn"
+          className="b sm g sp-close-btn"
           onClick={() => onClose(candidate.id, openState)}
           aria-label={`Close ${stateName} skills panel`}
         >
@@ -153,31 +138,31 @@ function CandidateSkillsDrawer({
         </button>
       </div>
 
-      <div className="skills-panel-body">
+      <div className="sp-panel-body">
         {requiredSkills.length > 0 && (
-          <div className="skills-group">
-            <h5 className="skills-group-heading">
+          <div className="sp-skills-group">
+            <h5 className="sp-group-heading">
               Required by this role ({requiredSkills.length})
             </h5>
-            <div className="skills-group-items">
+            <div className="sp-group-items">
               {requiredSkills.map(renderSkillRow)}
             </div>
           </div>
         )}
 
         {otherSkills.length > 0 && (
-          <div className="skills-group">
-            <h5 className="skills-group-heading">
+          <div className="sp-skills-group">
+            <h5 className="sp-group-heading">
               Other skills on the passport ({otherSkills.length})
             </h5>
-            <div className="skills-group-items">
+            <div className="sp-group-items">
               {otherSkills.map(renderSkillRow)}
             </div>
           </div>
         )}
 
         {skillsInState.length === 0 && (
-          <p className="skills-empty-state">
+          <p className="sp-empty-state">
             No skills found in {stateName} state for this candidate.
           </p>
         )}
@@ -196,6 +181,7 @@ export default function RecruiterRoleDetail() {
   const [showLegend, setShowLegend] = useState(false)
   const [openPanels, setOpenPanels] = useState({}) // { [candidateId]: 'V' | 'S' | 'C' | 'X' | null }
   const [liveAnnouncement, setLiveAnnouncement] = useState('')
+  const [activeFilter, setActiveFilter] = useState('all') // 'all' | 'contradicted' | '80plus'
 
   // Candidate Data
   const [applicantsWithPassport, setApplicantsWithPassport] = useState([])
@@ -369,6 +355,17 @@ export default function RecruiterRoleDetail() {
 
   // Ranked Leaderboard computation using rankApplicants pure function
   const rankedCandidates = rankApplicants(role, applicantsWithPassport)
+
+  // Filtered candidates based on activeFilter (All | With contradicted skills | 80% and above)
+  const filteredCandidates = useMemo(() => {
+    if (activeFilter === 'contradicted') {
+      return rankedCandidates.filter((c) => c.contradictedCount > 0)
+    }
+    if (activeFilter === '80plus') {
+      return rankedCandidates.filter((c) => c.score >= 80)
+    }
+    return rankedCandidates
+  }, [rankedCandidates, activeFilter])
 
   // In-card skills panel handlers
   const handleToggleTile = (candidateId, stateKey, count, dispName) => {
@@ -812,348 +809,236 @@ export default function RecruiterRoleDetail() {
                 </div>
               </div>
 
-              {/* Anonymous Screening Switch */}
-              <label className="revoke-switch-label" title="Mask candidate names for unbiased screening">
+            </div>
+
+            {/* Filter row & Hide Candidate Names */}
+            <div className="leaderboard-controls-row">
+              <div className="leaderboard-filter-group">
+                <Seg
+                  items={[
+                    { id: 'all', label: 'All' },
+                    { id: 'contradicted', label: 'With contradicted skills' },
+                    { id: '80plus', label: '80% and above' },
+                  ]}
+                  value={activeFilter}
+                  onChange={(val) => setActiveFilter(val)}
+                  label="Filter leaderboard candidates"
+                />
+                <span className="lb-filter-count">
+                  Showing {filteredCandidates.length} of {rankedCandidates.length}
+                </span>
+              </div>
+
+              <label className="lb-hide-names-label">
                 <input
                   type="checkbox"
                   checked={hideNames}
                   onChange={handleToggleHideNames}
                 />
-                <span>Hide candidate names (Anonymous Review)</span>
+                <span>Hide candidate names</span>
               </label>
             </div>
 
-            <div className="responsive-table-wrapper" data-lenis-prevent>
-              <table className="dash-table leaderboard-table">
-                <thead>
-                  <tr>
-                    <th style={{ width: '64px' }}>Rank</th>
-                    <th>Candidate</th>
-                    <th style={{ width: '110px' }}>Match %</th>
-                    <th className="th-skill-states">Skill states</th>
-                    <th>Top Skills & Evidence</th>
-                    <th style={{ textAlign: 'right', width: '150px' }}>Actions</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {rankedCandidates.length === 0 ? (
-                    <tr>
-                      <td colSpan="6" style={{ textAlign: 'center', padding: '36px', color: 'var(--muted)' }}>
-                        No candidates with passports evaluated yet.
-                      </td>
-                    </tr>
-                  ) : (
-                    rankedCandidates.map((c) => {
+            <div className="leaderboard-wrapper">
+              {filteredCandidates.length === 0 ? (
+                <div className="lb-empty-filter">
+                  <p>No candidates match this filter.</p>
+                  <button
+                    type="button"
+                    className="b sm g"
+                    onClick={() => setActiveFilter('all')}
+                  >
+                    Show all
+                  </button>
+                </div>
+              ) : (
+                <>
+                  <div className="leaderboard-header" role="row" aria-hidden="true">
+                    <div className="lb-col-h">Rank</div>
+                    <div className="lb-col-h">Candidate</div>
+                    <div className="lb-col-h">Match</div>
+                    <div className="lb-col-h">Skills</div>
+                    <div className="lb-col-h lb-col-h-actions" />
+                  </div>
+
+                  <ul className="leaderboard-list" role="list">
+                    {filteredCandidates.map((c, idx) => {
                       const skillsByState = getSkillsByState(c.passport, role)
                       const countV = skillsByState.V.length
                       const countS = skillsByState.S.length
                       const countC = skillsByState.C.length
                       const countX = skillsByState.X.length
-                      const totalSkills = countV + countS + countC + countX
-                      const pctV = totalSkills > 0 ? Math.round((countV / totalSkills) * 100) : 0
-                      const pctS = totalSkills > 0 ? Math.round((countS / totalSkills) * 100) : 0
-                      const pctC = totalSkills > 0 ? Math.round((countC / totalSkills) * 100) : 0
-                      const pctX = totalSkills > 0 ? Math.round((countX / totalSkills) * 100) : 0
                       const openState = openPanels[c.id] || null
-                      const displayedName = hideNames ? `Candidate #${c.rank.toString().padStart(2, '0')}` : c.name
+                      const displayedName = hideNames
+                        ? `Candidate #${c.rank.toString().padStart(2, '0')}`
+                        : c.name
+
+                      // Tie note calculation
+                      let tieNote = null
+                      const nextCandidate = rankedCandidates[idx + 1]
+                      if (nextCandidate && nextCandidate.score === c.score) {
+                        const nextName = hideNames
+                          ? `Candidate #${nextCandidate.rank.toString().padStart(2, '0')}`
+                          : nextCandidate.name
+                        let reason = 'fresher verification timestamp'
+                        if (c.verifiedReqCount > nextCandidate.verifiedReqCount) {
+                          reason = `more verified required skills (${c.verifiedReqCount} vs ${nextCandidate.verifiedReqCount})`
+                        } else if (c.contradictedCount < nextCandidate.contradictedCount) {
+                          reason =
+                            c.contradictedCount === 0
+                              ? `no contradicted skills (0 vs ${nextCandidate.contradictedCount})`
+                              : `fewer contradicted skills (${c.contradictedCount} vs ${nextCandidate.contradictedCount})`
+                        }
+                        tieNote = `Ranked above ${nextName}: ${reason}`
+                      }
+
+                      // Top 3 skills text
+                      const topSkillsText = (c.matched || [])
+                        .slice(0, 3)
+                        .map((m) => m.skill)
+                        .join(', ')
+
+                      const stateButtons = [
+                        { key: 'V', count: countV, word: 'Verified', swatchClass: 'swatch-v' },
+                        { key: 'S', count: countS, word: 'Supported', swatchClass: 'swatch-s' },
+                        { key: 'C', count: countC, word: 'Claimed', swatchClass: 'swatch-c' },
+                        { key: 'X', count: countX, word: 'Contradicted', swatchClass: 'swatch-x' },
+                      ]
 
                       return (
-                        <tr key={c.id} className={openState ? 'has-open-panel' : ''}>
-                          {/* Rank Column with Compare Checkbox */}
-                          <td data-label="Rank" className="td-rank">
-                            <div className="rank-cell-content">
-                              <label
-                                className="compare-checkbox-label"
-                                title={`Select ${displayedName} for comparison`}
-                              >
-                                <input
-                                  type="checkbox"
-                                  checked={compareIds.has(c.id)}
-                                  onChange={() => handleToggleCompare(c.id)}
-                                  disabled={!compareIds.has(c.id) && compareIds.size >= 3}
-                                  aria-label={`Select ${displayedName} for comparison`}
-                                />
-                              </label>
-                              <span className={`rank-badge ${c.rank === 1 ? 'top-1' : ''}`}>
-                                {c.rank}
-                              </span>
-                            </div>
-                          </td>
+                        <li
+                          key={c.id}
+                          className={`leaderboard-item ${openState ? 'has-open-panel' : ''}`}
+                        >
+                          {/* Column 1: Rank */}
+                          <div className="lb-cell lb-cell-rank">
+                            <span className="lb-rank-num">{c.rank}</span>
+                          </div>
 
-                          {/* Candidate Name / Anonymous Mask */}
-                          <td data-label="Candidate">
-                            <div>
-                              <strong>{displayedName}</strong>
+                          {/* Column 2: Candidate */}
+                          <div className="lb-cell lb-cell-candidate">
+                            <div className="lb-primary-name">
+                              <span className="lb-candidate-name">{displayedName}</span>
                               {c.isLiveDemo && (
-                                <span className="live-demo-tag">Live demo applicant</span>
+                                <span className="lb-tag">Live demo</span>
                               )}
                               {c.isRecruiterGenerated && (
                                 <>
-                                  <span className="recruiter-tag">Recruiter generated</span>
-                                  <span className="recruiter-tag" style={{ marginLeft: '4px', background: 'var(--surface-3)', border: '1px solid var(--line-soft)' }}>
+                                  <span className="lb-tag">Recruiter generated</span>
+                                  <span className="lb-tag" style={{ marginLeft: '4px', background: 'var(--surface-3)', border: '1px solid var(--line-soft)' }}>
                                     ownership unconfirmed
                                   </span>
                                 </>
                               )}
                               {c.decidingFactor && (
-                                <span className="deciding-factor-note">
+                                <span className="lb-tie-note" style={{ fontStyle: 'normal' }}>
                                   ↳ {c.decidingFactor}
                                 </span>
                               )}
                             </div>
-                          </td>
+                            {tieNote && <div className="lb-tie-note">{tieNote}</div>}
+                          </div>
 
-                          {/* Match % */}
-                          <td data-label="Match %">
-                            <span className="leaderboard-match-val">
-                              {c.score}%
-                            </span>
-                          </td>
-
-                          {/* Skill states Analytics Block */}
-                          <td data-label="Skill states" className="td-skill-states">
-                            <div className="skill-states-analytics">
-                              <div className="analytics-top-line">
-                                {totalSkills} skills evaluated
-                              </div>
-
-                              <div
-                                className="analytics-tiles-grid"
-                                role="group"
-                                aria-label={`Skill states: ${countV} Verified, ${countS} Supported, ${countC} Claimed, ${countX} Contradicted`}
-                              >
-                                {/* Verified Tile */}
-                                <button
-                                  type="button"
-                                  id={`tile-btn-${c.id}-V`}
-                                  className={`analytics-tile tile-v ${countV === 0 ? 'zero' : ''} ${openState === 'V' ? 'selected' : ''}`}
-                                  onClick={() => handleToggleTile(c.id, 'V', countV, displayedName)}
-                                  disabled={countV === 0}
-                                  aria-disabled={countV === 0}
-                                  aria-expanded={openState === 'V'}
-                                  aria-controls={`skills-panel-${c.id}`}
-                                  title={countV === 0 ? 'No skills in this state' : `${countV} Verified skills`}
-                                >
-                                  <div className="tile-head-row">
-                                    <div className="tile-count-wrap">
-                                      <span className="tile-count">{countV}</span>
-                                    </div>
-                                    <svg
-                                      className={`tile-chevron ${openState === 'V' ? 'open' : ''}`}
-                                      viewBox="0 0 16 16"
-                                      width="12"
-                                      height="12"
-                                      aria-hidden="true"
-                                    >
-                                      <path
-                                        d="M3.5 6L8 10.5L12.5 6"
-                                        fill="none"
-                                        stroke="currentColor"
-                                        strokeWidth="1.75"
-                                        strokeLinecap="round"
-                                        strokeLinejoin="round"
-                                      />
-                                    </svg>
-                                  </div>
-                                  <span className="tile-label">Verified</span>
-                                  <div className="tile-bar-track">
-                                    <div className="tile-bar-fill fill-v" style={{ width: `${pctV}%` }} />
-                                  </div>
-                                  <span className="tile-pct">{pctV}%</span>
-                                </button>
-
-                                {/* Supported Tile */}
-                                <button
-                                  type="button"
-                                  id={`tile-btn-${c.id}-S`}
-                                  className={`analytics-tile tile-s ${countS === 0 ? 'zero' : ''} ${openState === 'S' ? 'selected' : ''}`}
-                                  onClick={() => handleToggleTile(c.id, 'S', countS, displayedName)}
-                                  disabled={countS === 0}
-                                  aria-disabled={countS === 0}
-                                  aria-expanded={openState === 'S'}
-                                  aria-controls={`skills-panel-${c.id}`}
-                                  title={countS === 0 ? 'No skills in this state' : `${countS} Supported skills`}
-                                >
-                                  <div className="tile-head-row">
-                                    <div className="tile-count-wrap">
-                                      <span className="tile-count">{countS}</span>
-                                    </div>
-                                    <svg
-                                      className={`tile-chevron ${openState === 'S' ? 'open' : ''}`}
-                                      viewBox="0 0 16 16"
-                                      width="12"
-                                      height="12"
-                                      aria-hidden="true"
-                                    >
-                                      <path
-                                        d="M3.5 6L8 10.5L12.5 6"
-                                        fill="none"
-                                        stroke="currentColor"
-                                        strokeWidth="1.75"
-                                        strokeLinecap="round"
-                                        strokeLinejoin="round"
-                                      />
-                                    </svg>
-                                  </div>
-                                  <span className="tile-label">Supported</span>
-                                  <div className="tile-bar-track">
-                                    <div className="tile-bar-fill fill-s" style={{ width: `${pctS}%` }} />
-                                  </div>
-                                  <span className="tile-pct">{pctS}%</span>
-                                </button>
-
-                                {/* Claimed Tile */}
-                                <button
-                                  type="button"
-                                  id={`tile-btn-${c.id}-C`}
-                                  className={`analytics-tile tile-c ${countC === 0 ? 'zero' : ''} ${openState === 'C' ? 'selected' : ''}`}
-                                  onClick={() => handleToggleTile(c.id, 'C', countC, displayedName)}
-                                  disabled={countC === 0}
-                                  aria-disabled={countC === 0}
-                                  aria-expanded={openState === 'C'}
-                                  aria-controls={`skills-panel-${c.id}`}
-                                  title={countC === 0 ? 'No skills in this state' : `${countC} Claimed skills`}
-                                >
-                                  <div className="tile-head-row">
-                                    <div className="tile-count-wrap">
-                                      <span className="tile-count">{countC}</span>
-                                    </div>
-                                    <svg
-                                      className={`tile-chevron ${openState === 'C' ? 'open' : ''}`}
-                                      viewBox="0 0 16 16"
-                                      width="12"
-                                      height="12"
-                                      aria-hidden="true"
-                                    >
-                                      <path
-                                        d="M3.5 6L8 10.5L12.5 6"
-                                        fill="none"
-                                        stroke="currentColor"
-                                        strokeWidth="1.75"
-                                        strokeLinecap="round"
-                                        strokeLinejoin="round"
-                                      />
-                                    </svg>
-                                  </div>
-                                  <span className="tile-label">Claimed</span>
-                                  <div className="tile-bar-track">
-                                    <div className="tile-bar-fill fill-c" style={{ width: `${pctC}%` }} />
-                                  </div>
-                                  <span className="tile-pct">{pctC}%</span>
-                                </button>
-
-                                {/* Contradicted Tile */}
-                                <button
-                                  type="button"
-                                  id={`tile-btn-${c.id}-X`}
-                                  className={`analytics-tile tile-x ${countX === 0 ? 'zero' : ''} ${openState === 'X' ? 'selected' : ''} ${c.contradictedCount > 0 ? 'has-flag' : ''}`}
-                                  onClick={() => handleToggleTile(c.id, 'X', countX, displayedName)}
-                                  disabled={countX === 0}
-                                  aria-disabled={countX === 0}
-                                  aria-expanded={openState === 'X'}
-                                  aria-controls={`skills-panel-${c.id}`}
-                                  title={countX === 0 ? 'No skills in this state' : `${countX} Contradicted skills`}
-                                >
-                                  <div className="tile-head-row">
-                                    <div className="tile-count-wrap">
-                                      <span className="tile-count">{countX}</span>
-                                      {c.contradictedCount > 0 && (
-                                        <span className="tile-flag-tag">Flagged</span>
-                                      )}
-                                    </div>
-                                    <svg
-                                      className={`tile-chevron ${openState === 'X' ? 'open' : ''}`}
-                                      viewBox="0 0 16 16"
-                                      width="12"
-                                      height="12"
-                                      aria-hidden="true"
-                                    >
-                                      <path
-                                        d="M3.5 6L8 10.5L12.5 6"
-                                        fill="none"
-                                        stroke="currentColor"
-                                        strokeWidth="1.75"
-                                        strokeLinecap="round"
-                                        strokeLinejoin="round"
-                                      />
-                                    </svg>
-                                  </div>
-                                  <span className="tile-label">Contradicted</span>
-                                  <div className="tile-bar-track">
-                                    <div className="tile-bar-fill fill-x" style={{ width: `${pctX}%` }} />
-                                  </div>
-                                  <span className="tile-pct">{pctX}%</span>
-                                </button>
-                              </div>
-
-                              {!openState && (
-                                <div className="tile-hint-line">
-                                  Select a state to see its skills.
-                                </div>
-                              )}
-
-                              {c.totalReqCount > 0 && (
-                                <div className="analytics-bottom-line">
-                                  {c.verifiedReqCount} of {c.totalReqCount} required skills Verified
-                                </div>
-                              )}
+                          {/* Column 3: Match */}
+                          <div className="lb-cell lb-cell-match">
+                            <div className="lb-primary-match">
+                              <span className="lb-match-val">{c.score}%</span>
+                              <span className="lb-match-lbl">match</span>
                             </div>
-                          </td>
+                          </div>
 
-                          {/* Top Matched & Missing Skills */}
-                          <td data-label="Top Skills & Evidence">
-                            <div style={{ display: 'flex', flexWrap: 'wrap', gap: '4px' }}>
-                              {c.matched.slice(0, 3).map((m) => (
-                                <span key={m.skill} className={`chip sm ${m.state}`}>
-                                  {m.skill}
-                                </span>
-                              ))}
-                              {c.missing.length > 0 && (
-                                <span style={{ fontSize: '0.72rem', color: 'var(--faint)', alignSelf: 'center' }}>
-                                  +{c.missing.length} missing
-                                </span>
-                              )}
+                          {/* Column 4: Skills */}
+                          <div className="lb-cell lb-cell-skills">
+                            <div className="lb-primary-states" role="group" aria-label="Skill states">
+                              {stateButtons.map(({ key, count, word, swatchClass }) => {
+                                const isZero = count === 0
+                                const isSelected = openState === key
+                                const isContradictedWithCount = key === 'X' && count > 0
+
+                                return (
+                                  <button
+                                    key={key}
+                                    type="button"
+                                    id={`tile-btn-${c.id}-${key}`}
+                                    className={`lb-state-btn ${swatchClass} ${isSelected ? 'selected' : ''} ${isContradictedWithCount ? 'contradicted-active' : ''}`}
+                                    onClick={() => handleToggleTile(c.id, key, count, displayedName)}
+                                    disabled={isZero}
+                                    aria-disabled={isZero}
+                                    aria-expanded={isSelected}
+                                    aria-pressed={isSelected}
+                                    aria-controls={`skills-panel-${c.id}`}
+                                    title={isZero ? 'No skills in this state' : `${count} ${word} skills`}
+                                  >
+                                    <span className={`lb-state-swatch ${swatchClass}`} aria-hidden="true" />
+                                    <span className="lb-state-count">{count}</span>
+                                    <span className="lb-state-word">{word}</span>
+                                  </button>
+                                )
+                              })}
                             </div>
-                          </td>
 
-                          {/* Actions */}
-                          <td data-label="Actions" className="leaderboard-actions" style={{ textAlign: 'right' }}>
+                            {c.totalReqCount > 0 && (
+                              <div className="lb-skills-req-note">
+                                {c.verifiedReqCount} of {c.totalReqCount} required skills Verified
+                              </div>
+                            )}
+
+                            {topSkillsText && (
+                              <div className="lb-top-skills">
+                                <span className="lb-top-skills-lbl">Top skills:</span> {topSkillsText}
+                              </div>
+                            )}
+                          </div>
+
+                          {/* Column 5: Actions */}
+                          <div className="lb-cell lb-cell-actions">
+                            <label
+                              className="lb-compare-label"
+                              title={`Select ${displayedName} for comparison`}
+                            >
+                              <input
+                                type="checkbox"
+                                checked={compareIds.has(c.id)}
+                                onChange={() => handleToggleCompare(c.id)}
+                                disabled={!compareIds.has(c.id) && compareIds.size >= 3}
+                                aria-label={`Select ${displayedName} for comparison`}
+                              />
+                              <span>Compare</span>
+                            </label>
                             {c.passport && (
                               <Link
                                 to={`/passport/${c.passport.id}`}
-                                className="b sm g"
-                                style={{ whiteSpace: 'nowrap' }}
+                                className="b sm g lb-view-passport-btn"
                               >
-                                View passport →
+                                View passport
                               </Link>
                             )}
-                          </td>
+                          </div>
 
                           {/* In-Card Skills Panel Row (Spans full width below row columns) */}
-                          <td className="skills-panel-td" style={{ gridColumn: '1 / -1' }}>
-                            <div
-                              className={`skills-panel-drawer ${openState ? 'open' : ''} ${RM ? 'rm' : ''}`}
-                            >
-                              <div className="skills-panel-drawer-inner">
-                                {openState && (
-                                  <CandidateSkillsDrawer
-                                    candidate={c}
-                                    role={role}
-                                    openState={openState}
-                                    skillsByState={skillsByState}
-                                    onClose={handleClosePanel}
-                                    displayedName={displayedName}
-                                  />
-                                )}
-                              </div>
+                          <div
+                            className={`lb-drawer-row ${openState ? 'open' : ''} ${RM ? 'rm' : ''}`}
+                            style={{ gridColumn: '1 / -1' }}
+                          >
+                            <div className="lb-drawer-inner">
+                              {openState && (
+                                <CandidateSkillsDrawer
+                                  candidate={c}
+                                  role={role}
+                                  openState={openState}
+                                  skillsByState={skillsByState}
+                                  onClose={handleClosePanel}
+                                  displayedName={displayedName}
+                                />
+                              )}
                             </div>
-                          </td>
-                        </tr>
+                          </div>
+                        </li>
                       )
-                    })
-                  )}
-                </tbody>
-              </table>
+                    })}
+                  </ul>
+                </>
+              )}
             </div>
           </div>
         )}
