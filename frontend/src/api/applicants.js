@@ -3,11 +3,12 @@
  * Manages applicants per job role, filtering by passport presence, CSV ingestion, and applicant updates.
  */
 
-import { generateSampleApplicants } from '../data/seed.js'
+import { generateSampleApplicants, syncSeedDataIfNeeded } from '../data/seed.js'
 
 const STORAGE_APPLICANTS_KEY = 'pp_prototype_applicants'
 
 function loadStoredApplicants() {
+  syncSeedDataIfNeeded()
   try {
     const raw = localStorage.getItem(STORAGE_APPLICANTS_KEY)
     if (!raw) {
@@ -29,6 +30,8 @@ function saveStoredApplicants(applicants) {
   }
 }
 
+// BACKEND: Candidate compare and role evaluation depend on GET /api/v1/roles/:roleId/applicants
+// Backend must return applicants with full cryptographic passports, including skills array with state (V/S/C/X), level, evidence, and issued timestamp.
 /**
  * List all applicants for a specific role.
  * Future backend endpoint: GET /api/v1/roles/:roleId/applicants

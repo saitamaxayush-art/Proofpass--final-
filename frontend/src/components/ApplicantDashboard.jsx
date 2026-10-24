@@ -9,6 +9,7 @@ import { Link, useNavigate } from 'react-router-dom'
 import { useAuth } from '../auth/AuthContext.jsx'
 import { listPassports, setPassportRevoked, savePassport } from '../api/passports.js'
 import { getRecommendedRoles } from '../api/recommendations.js'
+import { getLatestRoleKey, listRoadmaps } from '../api/roadmaps.js'
 import { imochaLink } from '../data/resources.js'
 import { L, WEIGHTS } from '../data.js'
 
@@ -21,6 +22,8 @@ export default function ApplicantDashboard() {
   const [stateFilter, setStateFilter] = useState('ALL')
   const [expandedEvidence, setExpandedEvidence] = useState({})
   const [recommendedRoles, setRecommendedRoles] = useState([])
+  const [roleRoadmaps, setRoleRoadmaps] = useState([])
+  const [latestRole, setLatestRole] = useState(null)
   const [selfSubmittedLinks, setSelfSubmittedLinks] = useState({})
   const [copiedLink, setCopiedLink] = useState(false)
   const [notice, setNotice] = useState(null)
@@ -39,8 +42,21 @@ export default function ApplicantDashboard() {
           active = all.find((p) => p.candidate === user?.name || p.userId === user?.id) || null
         }
 
+        // Load latest target role and its roadmaps
+        let role = await getLatestRoleKey(user?.id)
+        let rms = []
+        if (role) {
+          rms = await listRoadmaps(user?.id, role.roleKey)
+        } else if (active?.targetRole) {
+          const roleKey = active.targetRole.toLowerCase().trim()
+          role = { roleKey, roleName: active.targetRole }
+          rms = await listRoadmaps(user?.id, roleKey)
+        }
+
         if (mounted) {
           setPassport(active)
+          setLatestRole(role)
+          setRoleRoadmaps(rms || [])
           if (active && active.skills) {
             const roles = await getRecommendedRoles(active.skills)
             setRecommendedRoles(roles)
@@ -192,6 +208,20 @@ export default function ApplicantDashboard() {
   // Verify the rest: Claimed or Contradicted skills
   const skillsToVerifyRest = skills.filter((s) => s.state === 'C' || s.state === 'X')
 
+  // Extract up to 3 next incomplete steps across active roadmaps
+  const nextSteps = []
+  for (const r of roleRoadmaps) {
+    if (r.status !== 'completed') {
+      for (const s of r.steps || []) {
+        if (!s.done) {
+          nextSteps.push({ ...s, skillName: r.skillName, roleKey: r.roleKey, skillId: r.skillId })
+          if (nextSteps.length >= 3) break
+        }
+      }
+    }
+    if (nextSteps.length >= 3) break
+  }
+
   return (
     <main id="main" className="dash-page">
       <div className="w">
@@ -335,6 +365,112 @@ export default function ApplicantDashboard() {
               </strong>
             </span>
           </div>
+        </div>
+
+        {/* Learning Roadmaps Card */}
+        <div className="table-card glass" style={{ padding: '24px', marginBottom: '28px' }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: '16px', marginBottom: '16px' }}>
+            <div>
+              <div className="k m" style={{ color: 'var(--accent)', marginBottom: '4px' }}>
+                {latestRole?.roleName ? `TARGET ROLE: ${latestRole.roleName.toUpperCase()}` : 'SKILL GAP ROADMAPS'}
+              </div>
+              <h2 style={{ fontSize: '1.2rem', fontWeight: 600, color: 'var(--ink)', margin: 0 }}>
+                Learning Roadmaps
+              </h2>
+              <p style={{ fontSize: '0.85rem', color: 'var(--muted)', margin: '4px 0 0' }}>
+                {latestRole?.roleName
+                  ? `Curated courses and assessments for required skills not yet Verified for ${latestRole.roleName}.`
+                  : 'Targeted course modules and verification assessments for skills your target role needs.'}
+              </p>
+            </div>
+
+            <Link to="/learnings" className="b sm">
+              View all roadmaps <span className="btn-arrow" aria-hidden="true">-&gt;</span>
+            </Link>
+          </div>
+
+          {roleRoadmaps.length === 0 ? (
+            <div style={{ padding: '12px 0', color: 'var(--muted)', fontSize: '0.88rem' }}>
+              {latestRole
+                ? 'Every skill your target role needs is Verified. No roadmap needed.'
+                : 'No roadmaps yet. Run verification to build a plan for your target role.'}
+            </div>
+          ) : (
+            <div>
+              {/* Counts summary */}
+              <div style={{ display: 'flex', gap: '20px', flexWrap: 'wrap', marginBottom: '16px' }}>
+                <div style={{ fontSize: '0.85rem' }}>
+                  <span style={{ color: 'var(--muted)' }}>Active Roadmaps: </span>
+                  <strong>{roleRoadmaps.filter((r) => r.status !== 'completed').length}</strong>
+                </div>
+                <div style={{ fontSize: '0.85rem' }}>
+                  <span style={{ color: 'var(--muted)' }}>Completed: </span>
+                  <strong style={{ color: 'var(--st-v)' }}>{roleRoadmaps.filter((r) => r.status === 'completed').length}</strong>
+                </div>
+                <div style={{ fontSize: '0.85rem' }}>
+                  <span style={{ color: 'var(--muted)' }}>Steps Progress: </span>
+                  <strong>
+                    {roleRoadmaps.reduce((acc, r) => acc + (r.steps?.filter((s) => s.done).length || 0), 0)} of{' '}
+                    {roleRoadmaps.reduce((acc, r) => acc + (r.steps?.length || 0), 0)} done
+                  </strong>
+                </div>
+              </div>
+
+              {/* Next 3 recommended steps */}
+              {nextSteps.length > 0 ? (
+                <div>
+                  <span className="k m" style={{ fontSize: '0.72rem', display: 'block', marginBottom: '8px', opacity: 0.75 }}>
+                    NEXT 3 RECOMMENDED STEPS
+                  </span>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                    {nextSteps.map((step) => (
+                      <div
+                        key={step.id}
+                        style={{
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'space-between',
+                          padding: '10px 14px',
+                          borderRadius: '8px',
+                          background: 'var(--surface)',
+                          border: '1px solid var(--line)',
+                          gap: '12px',
+                          flexWrap: 'wrap',
+                        }}
+                      >
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
+                          <span className="chip sm" style={{ fontSize: '0.7rem' }}>
+                            {step.skillName}
+                          </span>
+                          <span style={{ fontSize: '0.88rem', fontWeight: 500, color: 'var(--ink)' }}>
+                            {step.title}
+                          </span>
+                          <span className="m" style={{ fontSize: '0.75rem', color: 'var(--faint)' }}>
+                            ({step.platform})
+                          </span>
+                        </div>
+                        {step.url && (
+                          <a
+                            href={step.url}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="b g sm"
+                            style={{ fontSize: '0.75rem', padding: '4px 10px', textDecoration: 'none' }}
+                          >
+                            Open ↗
+                          </a>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              ) : (
+                <div style={{ fontSize: '0.85rem', color: 'var(--st-v)' }}>
+                  ✓ All current steps completed! You are ready to re-verify your passport.
+                </div>
+              )}
+            </div>
+          )}
         </div>
 
         {/* Skills Breakdown Table */}

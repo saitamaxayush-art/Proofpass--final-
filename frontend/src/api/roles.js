@@ -3,11 +3,12 @@
  * Manages job role openings, skill requirements, weights, and sample CVs.
  */
 
-import { SAMPLE_ROLES } from '../data/seed.js'
+import { SAMPLE_ROLES, syncSeedDataIfNeeded } from '../data/seed.js'
 
 const STORAGE_ROLES_KEY = 'pp_prototype_roles'
 
 function loadStoredRoles() {
+  syncSeedDataIfNeeded()
   try {
     const raw = localStorage.getItem(STORAGE_ROLES_KEY)
     if (!raw) {
@@ -39,6 +40,8 @@ export async function listRoles() {
   return loadStoredRoles()
 }
 
+// BACKEND: Candidate compare and role evaluation depend on GET /api/v1/roles/:id
+// Backend must return role title, company, description, and requiredSkills with skill, importance (Must/Should/Nice), and numeric weight (3/2/1).
 /**
  * Retrieve a single role by ID.
  * Future backend endpoint: GET /api/v1/roles/:id

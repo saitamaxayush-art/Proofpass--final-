@@ -17,9 +17,11 @@ gsap.registerPlugin(ScrollTrigger)
 const Verify = lazy(() => import('./components/Verify.jsx'))
 const ApplicantDashboard = lazy(() => import('./components/ApplicantDashboard.jsx'))
 const Recommendations = lazy(() => import('./components/Recommendations.jsx'))
+const Learnings = lazy(() => import('./components/Learnings.jsx'))
 const PassportView = lazy(() => import('./components/PassportView.jsx'))
 const RecruiterDashboard = lazy(() => import('./components/RecruiterDashboard.jsx'))
 const RecruiterRoleDetail = lazy(() => import('./components/RecruiterRoleDetail.jsx'))
+const CandidateCompare = lazy(() => import('./components/CandidateCompare.jsx'))
 
 const prefetchVerify = () => {
   import('./components/Verify.jsx')
@@ -352,6 +354,13 @@ function AppShell() {
                   Verify
                 </Link>
                 <Link
+                  to="/learnings"
+                  aria-current={pathname === '/learnings' ? 'page' : undefined}
+                  onClick={handleMobileNavClick}
+                >
+                  Learnings
+                </Link>
+                <Link
                   to="/recommendations"
                   aria-current={pathname === '/recommendations' ? 'page' : undefined}
                   onClick={handleMobileNavClick}
@@ -527,6 +536,16 @@ function AppShell() {
               }
             />
             <Route
+              path="/learnings"
+              element={
+                <RequireRole roles="applicant">
+                  <ErrorBoundary>
+                    <Learnings />
+                  </ErrorBoundary>
+                </RequireRole>
+              }
+            />
+            <Route
               path="/recommendations"
               element={
                 <RequireRole roles="applicant">
@@ -544,6 +563,16 @@ function AppShell() {
                 <RequireRole roles="recruiter">
                   <ErrorBoundary>
                     <RecruiterDashboard />
+                  </ErrorBoundary>
+                </RequireRole>
+              }
+            />
+            <Route
+              path="/recruiter/role/:roleId/compare"
+              element={
+                <RequireRole roles="recruiter">
+                  <ErrorBoundary>
+                    <CandidateCompare />
                   </ErrorBoundary>
                 </RequireRole>
               }

@@ -28,6 +28,8 @@ import {
 } from '../engine/index.js'
 import { useAuth } from '../auth/AuthContext.jsx'
 import { savePassport } from '../api/passports.js'
+import { buildRoadmapsForGaps } from '../lib/roadmap.js'
+import { saveRoadmapsFromVerification, updateRoadmapStep } from '../api/roadmaps.js'
 
 const STEP_DEFINITIONS = [
   { id: 0, title: 'Intake', subtitle: 'Form and consent' },
@@ -210,6 +212,19 @@ export default function Verify() {
   // Step 8 Verification / Tamper state
   const [hashCheckResult, setHashCheckResult] = useState(null)
   const [activeResultTab, setActiveResultTab] = useState('Candidate')
+
+  // Step 7 Close your gaps roadmaps state
+  const [openGapSkill, setOpenGapSkill] = useState(null)
+  const [roadmapsStepDone, setRoadmapsStepDone] = useState({})
+
+  // Idempotently sync roadmaps when Step 7 completes
+  useEffect(() => {
+    if (currentStep === 7 && roleMatchData?.rankedGaps && intakeData?.targetRole) {
+      saveRoadmapsFromVerification(user?.id, intakeData.targetRole, roleMatchData.rankedGaps).catch((err) =>
+        console.warn('Failed to sync roadmaps in Step 7:', err)
+      )
+    }
+  }, [currentStep, roleMatchData, intakeData?.targetRole, user?.id])
 
   // Refs for animations and auto-scroll
   const contentCardRef = useRef(null)
@@ -1277,6 +1292,151 @@ export default function Verify() {
                     </tbody>
                   </table>
                 </div>
+
+                {/* CLOSE YOUR GAPS SECTION */}
+                {(() => {
+                  const gapRoadmaps = buildRoadmapsForGaps(intakeData?.targetRole, roleMatchData?.rankedGaps || [])
+                  return (
+                    <div className="table-card" style={{ marginTop: 24 }}>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 12, marginBottom: 6 }}>
+                        <h3 style={{ margin: 0, fontSize: '1.05rem', fontWeight: 600, color: 'var(--ink)' }}>
+                          Close your gaps for {intakeData?.targetRole || 'Target Role'}
+                        </h3>
+                        <span className="chip sm" style={{ fontFamily: 'var(--mono)' }}>
+                          {gapRoadmaps.length} {gapRoadmaps.length === 1 ? 'skill' : 'skills'}
+                        </span>
+                      </div>
+                      <p style={{ fontSize: '0.86rem', color: 'var(--muted)', margin: '0 0 16px 0', lineHeight: 1.45 }}>
+                        Skills your target role needs that are not Verified yet. Open a skill to see its roadmap.
+                      </p>
+
+                      {gapRoadmaps.length === 0 ? (
+                        <div style={{ padding: '20px 0', textAlign: 'center', color: 'var(--st-v)', fontSize: '0.92rem' }}>
+                          Every skill your target role needs is Verified. No roadmap needed.
+                        </div>
+                      ) : (
+                        <div className="gap-roadmaps-accordion" style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+                          {gapRoadmaps.map((roadmap) => {
+                            const isOpen = openGapSkill === roadmap.skillId
+                            const steps = roadmap.steps || []
+                            return (
+                              <div
+                                key={roadmap.skillId}
+                                style={{
+                                  borderRadius: 8,
+                                  border: '1px solid var(--line)',
+                                  background: 'var(--surface)',
+                                  overflow: 'hidden',
+                                  transition: 'border-color 0.2s ease',
+                                }}
+                              >
+                                <button
+                                  type="button"
+                                  onClick={() => setOpenGapSkill(isOpen ? null : roadmap.skillId)}
+                                  style={{
+                                    width: '100%',
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    justifyContent: 'space-between',
+                                    padding: '14px 16px',
+                                    background: 'transparent',
+                                    border: 'none',
+                                    cursor: 'pointer',
+                                    textAlign: 'left',
+                                    gap: 12,
+                                  }}
+                                  aria-expanded={isOpen}
+                                >
+                                  <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
+                                    <strong style={{ fontSize: '0.95rem', color: 'var(--ink)' }}>{roadmap.skillName}</strong>
+                                    <span className={`chip sm ${roadmap.state}`}>{L[roadmap.state] || roadmap.state}</span>
+                                    <span className="m" style={{ fontSize: '0.75rem', color: 'var(--faint)' }}>
+                                      Weight {roadmap.importance}
+                                    </span>
+                                  </div>
+                                  <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                                    <span className="m" style={{ fontSize: '0.78rem', color: 'var(--muted)' }}>
+                                      {steps.length} {steps.length === 1 ? 'step' : 'steps'}
+                                    </span>
+                                    <span style={{ fontSize: '0.85rem', color: 'var(--muted)', transform: isOpen ? 'rotate(180deg)' : 'rotate(0deg)', transition: 'transform 0.2s ease' }}>
+                                      ▼
+                                    </span>
+                                  </div>
+                                </button>
+
+                                {isOpen && (
+                                  <div style={{ padding: '0 16px 16px 16px', borderTop: '1px solid var(--line-soft)' }}>
+                                    <div style={{ display: 'flex', flexDirection: 'column', gap: 10, marginTop: 12 }}>
+                                      {steps.map((st, sIdx) => {
+                                        const isDone = Boolean(roadmapsStepDone[`${roadmap.skillId}:${st.id}`] ?? st.done)
+                                        return (
+                                          <div
+                                            key={st.id}
+                                            style={{
+                                              padding: '12px 14px',
+                                              borderRadius: 6,
+                                              background: isDone ? 'rgba(16, 185, 129, 0.05)' : 'var(--bg)',
+                                              border: `1px solid ${isDone ? 'rgba(16, 185, 129, 0.2)' : 'var(--line)'}`,
+                                              display: 'flex',
+                                              alignItems: 'flex-start',
+                                              justifyContent: 'space-between',
+                                              gap: 12,
+                                              flexWrap: 'wrap',
+                                            }}
+                                          >
+                                            <label style={{ display: 'flex', alignItems: 'flex-start', gap: 10, cursor: 'pointer', flex: 1 }}>
+                                              <input
+                                                type="checkbox"
+                                                checked={isDone}
+                                                onChange={async () => {
+                                                  const nextDone = !isDone
+                                                  setRoadmapsStepDone((prev) => ({ ...prev, [`${roadmap.skillId}:${st.id}`]: nextDone }))
+                                                  try {
+                                                    await updateRoadmapStep(user?.id, roadmap.roleKey, roadmap.skillId, st.id, { done: nextDone })
+                                                  } catch (err) {
+                                                    console.warn('Could not update step:', err)
+                                                  }
+                                                }}
+                                                style={{ marginTop: 3, accentColor: 'var(--accent)' }}
+                                              />
+                                              <div>
+                                                <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
+                                                  <span style={{ fontWeight: 600, fontSize: '0.88rem', textDecoration: isDone ? 'line-through' : 'none', color: isDone ? 'var(--muted)' : 'var(--ink)' }}>
+                                                    {sIdx + 1}. {st.title}
+                                                  </span>
+                                                  <span className="chip sm" style={{ fontSize: '0.7rem', padding: '1px 6px' }}>{st.type}</span>
+                                                  <span className="m" style={{ fontSize: '0.75rem', color: 'var(--faint)' }}>{st.platform}</span>
+                                                </div>
+                                                <p style={{ margin: '3px 0 0', fontSize: '0.8rem', color: 'var(--muted)' }}>
+                                                  {st.description}
+                                                </p>
+                                              </div>
+                                            </label>
+                                            {st.url && (
+                                              <a
+                                                href={st.url}
+                                                target="_blank"
+                                                rel="noopener noreferrer"
+                                                className="b g sm"
+                                                style={{ fontSize: '0.75rem', padding: '4px 10px', textDecoration: 'none' }}
+                                              >
+                                                Open ↗
+                                              </a>
+                                            )}
+                                          </div>
+                                        )
+                                      })}
+                                    </div>
+                                  </div>
+                                )}
+                              </div>
+                            )
+                          })}
+                        </div>
+                      )}
+                    </div>
+                  )
+                })()}
 
                 <div className="step-actions">
                   <button
