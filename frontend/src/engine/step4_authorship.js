@@ -51,8 +51,10 @@ const SKILL_AUTHORSHIP_PROFILES = {
   Testing: { lineShare: 80, commitCount: 28, filesTouched: 9, depth: 'Automated unit test assertions mocking external dependencies' },
 }
 
+import { extractCertificateEvidence, extractLeetCodeEvidence } from './sources/index.js'
+
 export async function executeStep4Authorship(evidenceData, readData, onLog = () => {}) {
-  onLog('Initiating Step 4: Analyzing commit history, git blame author share, and usage depth...')
+  onLog('Initiating Step 4: Analyzing commit history, git blame author share, and multi-source evidence...')
 
   const authorshipData = []
 
@@ -68,6 +70,8 @@ export async function executeStep4Authorship(evidenceData, readData, onLog = () 
 
     authorshipData.push({
       skill: item.skill,
+      source: 'github',
+      ceiling: 80,
       filePath: item.filePath,
       lineShare,
       commitCount,
@@ -86,6 +90,8 @@ export async function executeStep4Authorship(evidenceData, readData, onLog = () 
     if (item.flagReason && item.flagReason.includes('Forked code conflict')) {
       authorshipData.push({
         skill: item.skill,
+        source: 'github',
+        ceiling: 0,
         filePath: item.filePath || 'None',
         lineShare: 0,
         commitCount: 0,
@@ -98,6 +104,8 @@ export async function executeStep4Authorship(evidenceData, readData, onLog = () 
     } else {
       authorshipData.push({
         skill: item.skill,
+        source: 'resume',
+        ceiling: 20,
         filePath: item.filePath || 'None',
         lineShare: 0,
         commitCount: 0,
@@ -106,6 +114,36 @@ export async function executeStep4Authorship(evidenceData, readData, onLog = () 
         isOriginalAuthor: false,
         forkedTutorial: false,
       })
+    }
+  }
+
+  // 3. Integrate LeetCode & Certificate adapters if provided in intake
+  const claimedSkills = (readData?.claimedSkills || []).map((s) => s)
+  if (readData?.leetcodeUrl) {
+    const leetcodeRecords = extractLeetCodeEvidence(readData.leetcodeUrl, claimedSkills)
+    for (const rec of leetcodeRecords) {
+      const existing = authorshipData.find((a) => a.skill.toLowerCase() === rec.skill.toLowerCase())
+      if (existing && existing.lineShare === 0 && !existing.forkedTutorial) {
+        Object.assign(existing, rec)
+        onLog(`[Evidence Source: LeetCode] ${rec.skill}: Algorithmic problem-solving evidence attached (trust ceiling 60).`)
+      } else if (!existing) {
+        authorshipData.push(rec)
+        onLog(`[Evidence Source: LeetCode] ${rec.skill}: Algorithmic problem-solving evidence attached (trust ceiling 60).`)
+      }
+    }
+  }
+
+  if (readData?.certInput) {
+    const certRecords = extractCertificateEvidence(readData.certInput, claimedSkills)
+    for (const rec of certRecords) {
+      const existing = authorshipData.find((a) => a.skill.toLowerCase() === rec.skill.toLowerCase())
+      if (existing && existing.lineShare === 0 && !existing.forkedTutorial) {
+        Object.assign(existing, rec)
+        onLog(`[Evidence Source: Certificate] ${rec.skill}: Third-party certificate credential attached (trust ceiling 60).`)
+      } else if (!existing) {
+        authorshipData.push(rec)
+        onLog(`[Evidence Source: Certificate] ${rec.skill}: Third-party certificate credential attached (trust ceiling 60).`)
+      }
     }
   }
 

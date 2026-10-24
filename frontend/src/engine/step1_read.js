@@ -284,6 +284,8 @@ export async function executeStep1Read(intakeData, onLog = () => {}) {
     totalLinesRead,
     isSampleSource,
     fetchError,
+    leetcodeUrl: intakeData.leetcodeUrl || '',
+    certInput: intakeData.certInput || '',
   }
 
   onLog(`Step 1 Complete: Read ${result.skillsCount} claimed skills, ${result.repoCount} repositories, ${result.fileCount} code files, ${result.totalLinesRead.toLocaleString()} total lines.`)

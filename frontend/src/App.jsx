@@ -7,12 +7,19 @@ import Home from './components/Home.jsx'
 import Legal from './components/Legal.jsx'
 import Login from './components/Login.jsx'
 import ThemeToggle from './components/ThemeToggle.jsx'
+import ErrorBoundary from './components/ErrorBoundary.jsx'
 import { PRIVACY, TERMS } from './legal.js'
 import { RM, scroller, scrollToTarget } from './lib.js'
+import { AuthProvider, useAuth, RequireRole } from './auth/AuthContext.jsx'
 
 gsap.registerPlugin(ScrollTrigger)
 
 const Verify = lazy(() => import('./components/Verify.jsx'))
+const ApplicantDashboard = lazy(() => import('./components/ApplicantDashboard.jsx'))
+const Recommendations = lazy(() => import('./components/Recommendations.jsx'))
+const PassportView = lazy(() => import('./components/PassportView.jsx'))
+const RecruiterDashboard = lazy(() => import('./components/RecruiterDashboard.jsx'))
+const RecruiterRoleDetail = lazy(() => import('./components/RecruiterRoleDetail.jsx'))
 
 const prefetchVerify = () => {
   import('./components/Verify.jsx')
@@ -39,7 +46,16 @@ function Mark() {
 let hasPlayedNavIntro = false
 
 export default function App() {
+  return (
+    <AuthProvider>
+      <AppShell />
+    </AuthProvider>
+  )
+}
+
+function AppShell() {
   const { pathname } = useLocation()
+  const { user, logout } = useAuth()
   const home = pathname === '/'
   const [open, setOpen] = useState(false)
   const [current, setCurrent] = useState('')
@@ -95,7 +111,7 @@ export default function App() {
     ScrollTrigger.refresh()
   }, [pathname])
 
-  // Change 3: Nav links emerge from the logo and title on full page load
+  // Nav links emerge from the logo and title on full page load
   useLayoutEffect(() => {
     if (hasPlayedNavIntro || RM || window.innerWidth <= 820) return
 
@@ -195,7 +211,7 @@ export default function App() {
     }
   }, [])
 
-  // Change 4.2: Header scroll listener - toggles classes directly on ref, zero per-frame setState
+  // Header scroll listener - toggles classes directly on ref, zero per-frame setState
   useEffect(() => {
     let last = window.scrollY
 
@@ -276,6 +292,10 @@ export default function App() {
     return () => document.removeEventListener('click', onClick)
   }, [])
 
+  const handleMobileNavClick = () => {
+    setOpen(false)
+  }
+
   return (
     <>
       <a className="skip" href="#main">
@@ -299,56 +319,159 @@ export default function App() {
             className={`site-nav${open ? ' open' : ''}`}
             aria-label="Primary"
           >
-            {home ? (
-              SECTIONS.map(([id, label]) => (
-                <a
-                  key={id}
-                  href={`#${id}`}
-                  aria-current={current === id ? 'true' : undefined}
+            {!user ? (
+              home ? (
+                SECTIONS.map(([id, label]) => (
+                  <a
+                    key={id}
+                    href={`#${id}`}
+                    aria-current={current === id ? 'true' : undefined}
+                  >
+                    {label}
+                  </a>
+                ))
+              ) : (
+                <Link to="/" aria-current={pathname === '/' ? 'page' : undefined}>
+                  Home
+                </Link>
+              )
+            ) : user.role === 'applicant' ? (
+              <>
+                <Link
+                  to="/dashboard"
+                  aria-current={pathname === '/dashboard' ? 'page' : undefined}
+                  onClick={handleMobileNavClick}
                 >
-                  {label}
-                </a>
-              ))
+                  Dashboard
+                </Link>
+                <Link
+                  to="/verify"
+                  aria-current={pathname === '/verify' ? 'page' : undefined}
+                  onClick={handleMobileNavClick}
+                >
+                  Verify
+                </Link>
+                <Link
+                  to="/recommendations"
+                  aria-current={pathname === '/recommendations' ? 'page' : undefined}
+                  onClick={handleMobileNavClick}
+                >
+                  Recommendations
+                </Link>
+              </>
             ) : (
-              <Link to="/" aria-current={pathname === '/' ? 'page' : undefined}>
-                Home
+              <Link
+                to="/recruiter"
+                aria-current={pathname.startsWith('/recruiter') ? 'page' : undefined}
+                onClick={handleMobileNavClick}
+              >
+                Dashboard
               </Link>
             )}
-            <Link
-              to="/login"
-              className="b g sm nav-login-mobile"
-              style={{ display: open ? undefined : 'none' }}
-              onClick={() => setOpen(false)}
-            >
-              Log in
-            </Link>
-            <Link
-              to="/verify"
-              className="b sm nav-verify-mobile"
-              style={{ display: open ? undefined : 'none' }}
-              onClick={() => setOpen(false)}
-            >
-              Verify
-            </Link>
+
+            {!user ? (
+              <>
+                <Link
+                  to="/login"
+                  className="b g sm nav-login-mobile"
+                  style={{ display: open ? undefined : 'none' }}
+                  onClick={handleMobileNavClick}
+                >
+                  Log in
+                </Link>
+                <Link
+                  to="/login?tab=signup"
+                  className="b sm nav-verify-mobile"
+                  style={{ display: open ? undefined : 'none' }}
+                  onClick={handleMobileNavClick}
+                >
+                  Sign up
+                </Link>
+              </>
+            ) : (
+              <div
+                className="nav-mobile-user"
+                style={{
+                  display: open ? 'flex' : 'none',
+                  flexDirection: 'column',
+                  gap: '8px',
+                  marginTop: '12px',
+                  paddingTop: '12px',
+                  borderTop: '1px solid var(--line)',
+                }}
+              >
+                <div style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '4px 0' }}>
+                  <span style={{ fontWeight: 600 }}>{user.name}</span>
+                  <span className={`chip sm ${user.role === 'recruiter' ? 'C' : 'V'}`}>{user.role}</span>
+                </div>
+                <button
+                  type="button"
+                  className="b g sm"
+                  onClick={() => {
+                    handleMobileNavClick()
+                    logout()
+                  }}
+                >
+                  Log out
+                </button>
+              </div>
+            )}
           </nav>
           <div ref={actionsRef} className="bar-actions">
             <ThemeToggle />
-            <Link
-              to="/login"
-              className="b g sm"
-              aria-current={pathname === '/login' ? 'page' : undefined}
-            >
-              Log in
-            </Link>
-            <Link
-              to="/verify"
-              className="b sm"
-              aria-current={pathname === '/verify' ? 'page' : undefined}
-              onMouseEnter={prefetchVerify}
-              onFocus={prefetchVerify}
-            >
-              Verify
-            </Link>
+            {!user ? (
+              <>
+                <Link
+                  to="/login"
+                  className="b g sm"
+                  aria-current={pathname === '/login' ? 'page' : undefined}
+                >
+                  Log in
+                </Link>
+                <Link
+                  to="/login?tab=signup"
+                  className="b sm"
+                >
+                  Sign up
+                </Link>
+              </>
+            ) : (
+              <>
+                <div
+                  className="header-user-tag"
+                  style={{
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    gap: '8px',
+                    fontSize: '0.85rem',
+                  }}
+                >
+                  <span
+                    className="header-user-name"
+                    style={{
+                      fontWeight: 500,
+                      maxWidth: '140px',
+                      overflow: 'hidden',
+                      textOverflow: 'ellipsis',
+                      whiteSpace: 'nowrap',
+                    }}
+                    title={user.name}
+                  >
+                    {user.name}
+                  </span>
+                  <span className={`chip sm ${user.role === 'recruiter' ? 'C' : 'V'}`}>
+                    {user.role}
+                  </span>
+                </div>
+                <button
+                  type="button"
+                  className="b g sm"
+                  onClick={logout}
+                >
+                  Log out
+                </button>
+              </>
+            )}
             <button
               type="button"
               className="icon-btn nav-toggle"
@@ -368,10 +491,74 @@ export default function App() {
         <Suspense fallback={<main id="main" style={{ minHeight: '70vh' }} />}>
           <Routes>
             <Route path="/" element={<Home />} />
-            <Route path="/verify" element={<Verify />} />
             <Route path="/login" element={<Login />} />
             <Route path="/privacy" element={<Legal doc={PRIVACY} />} />
             <Route path="/terms" element={<Legal doc={TERMS} />} />
+
+            {/* Read-only Passport View (Applicant & Recruiter shared) */}
+            <Route
+              path="/passport/:passportId"
+              element={
+                <ErrorBoundary>
+                  <PassportView />
+                </ErrorBoundary>
+              }
+            />
+
+            {/* Applicant Protected Routes */}
+            <Route
+              path="/dashboard"
+              element={
+                <RequireRole roles="applicant">
+                  <ErrorBoundary>
+                    <ApplicantDashboard />
+                  </ErrorBoundary>
+                </RequireRole>
+              }
+            />
+            <Route
+              path="/verify"
+              element={
+                <RequireRole roles="applicant">
+                  <ErrorBoundary>
+                    <Verify />
+                  </ErrorBoundary>
+                </RequireRole>
+              }
+            />
+            <Route
+              path="/recommendations"
+              element={
+                <RequireRole roles="applicant">
+                  <ErrorBoundary>
+                    <Recommendations />
+                  </ErrorBoundary>
+                </RequireRole>
+              }
+            />
+
+            {/* Recruiter Protected Routes */}
+            <Route
+              path="/recruiter"
+              element={
+                <RequireRole roles="recruiter">
+                  <ErrorBoundary>
+                    <RecruiterDashboard />
+                  </ErrorBoundary>
+                </RequireRole>
+              }
+            />
+            <Route
+              path="/recruiter/role/:roleId"
+              element={
+                <RequireRole roles="recruiter">
+                  <ErrorBoundary>
+                    <RecruiterRoleDetail />
+                  </ErrorBoundary>
+                </RequireRole>
+              }
+            />
+
             <Route path="*" element={<Home />} />
           </Routes>
         </Suspense>

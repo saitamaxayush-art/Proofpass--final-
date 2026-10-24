@@ -26,6 +26,8 @@ import {
   verifyPassportIntegrity,
   simulateTamperEdit,
 } from '../engine/index.js'
+import { useAuth } from '../auth/AuthContext.jsx'
+import { savePassport } from '../api/passports.js'
 
 const STEP_DEFINITIONS = [
   { id: 0, title: 'Intake', subtitle: 'Form and consent' },
@@ -147,6 +149,8 @@ export default function Verify() {
     }
   }, [])
 
+  const { user } = useAuth()
+
   // Form State (Step 0)
   const [resumeMode, setResumeMode] = useState('paste')
   const [resumeText, setResumeText] = useState('')
@@ -157,10 +161,36 @@ export default function Verify() {
   const [githubUrl, setGithubUrl] = useState('')
   const [zipFile, setZipFile] = useState(null)
   const [certInput, setCertInput] = useState('')
+  const [leetcodeUrl, setLeetcodeUrl] = useState('')
   const [targetRole, setTargetRole] = useState('')
   const [consentAi, setConsentAi] = useState(false)
   const [consentRepo, setConsentRepo] = useState(false)
   const [formErrors, setFormErrors] = useState({})
+
+  // Prefill from user profile if available
+  useEffect(() => {
+    if (user?.profile?.targetRole && !targetRole) {
+      setTargetRole(user.profile.targetRole)
+    }
+    if (user?.profile?.github && !githubUrl) {
+      setGithubUrl(user.profile.github)
+    }
+    if (user?.profile?.leetcode && !leetcodeUrl) {
+      setLeetcodeUrl(user.profile.leetcode)
+    }
+    if (user?.profile?.certificates && !certInput) {
+      setCertInput(user.profile.certificates)
+    }
+    if (user?.profile?.experience && !resumeText && !resumeFile) {
+      const exp = user.profile.experience
+      const expText = Array.isArray(exp)
+        ? exp.map((e) => `${e.title || 'Role'} at ${e.org || 'Organization'} (${e.duration || 'Period'})\n${e.summary || ''}`).join('\n\n')
+        : String(exp)
+      if (expText.trim()) {
+        setResumeText(`${user.name || 'Candidate'}\nTarget: ${user.profile?.targetRole || ''}\n\nExperience:\n${expText}`)
+      }
+    }
+  }, [user])
 
   // Pipeline Data Storage
   const [intakeData, setIntakeData] = useState(null)
@@ -266,6 +296,8 @@ export default function Verify() {
       extractedSections: extractedResumeInfo?.sections || null,
       githubUrl: evidenceMode === 'github' ? githubUrl : '',
       zipFile: evidenceMode === 'zip' ? zipFile : null,
+      certInput,
+      leetcodeUrl,
       targetRole,
       consentAi,
       consentRepo,
@@ -452,10 +484,22 @@ export default function Verify() {
     setStepStatus((s) => ({ ...s, 8: 'running' }))
 
     try {
-      const data = await executeStep8IssuePassport(statesData.skillStates, intakeData?.targetRole || 'Senior Full Stack TypeScript Engineer', 'Alex Rivera', addLog)
+      const candidateName = user?.name || 'Alex Rivera'
+      const data = await executeStep8IssuePassport(
+        statesData.skillStates,
+        intakeData?.targetRole || 'Senior Full Stack TypeScript Engineer',
+        candidateName,
+        addLog
+      )
       setPassportData(data)
       setStepStatus((s) => ({ ...s, 8: 'done' }))
       addLog('Verification pipeline completed. Passport issued and sealed.')
+      try {
+        await savePassport(data.passport, user?.id)
+        addLog('Cryptographic passport saved to user vault.')
+      } catch (saveErr) {
+        console.warn('Failed saving passport:', saveErr)
+      }
     } catch (err) {
       setStepError(`Step 8 Issue Passport Error: ${err.message}`)
       setStepStatus((s) => ({ ...s, 8: 'flagged' }))
@@ -719,19 +763,37 @@ export default function Verify() {
                   {formErrors.evidence && <p className="field-error">{formErrors.evidence}</p>}
                 </div>
 
-                {/* 3. Optional Certificates */}
+                {/* 3. Optional LeetCode URL */}
                 <div className="form-group">
-                  <label className="form-label">3. Certificates (Optional)</label>
+                  <label className="form-label">3. LeetCode Profile URL (Optional)</label>
                   <input
                     type="text"
                     className="form-input"
-                    placeholder="Credential links or issuing organization titles"
+                    placeholder="https://leetcode.com/u/username or handle"
+                    value={leetcodeUrl}
+                    onChange={(e) => setLeetcodeUrl(e.target.value)}
+                  />
+                  <span className="form-hint m" style={{ fontSize: '0.8rem', opacity: 0.7, marginTop: 4, display: 'block' }}>
+                    Sample evidence for algorithms &amp; data structures (capped at 60 / Supported).
+                  </span>
+                </div>
+
+                {/* 4. Optional Certificates */}
+                <div className="form-group">
+                  <label className="form-label">4. Certificates or Credentials (Optional)</label>
+                  <input
+                    type="text"
+                    className="form-input"
+                    placeholder="Credential links or issuing organization titles (e.g. AWS SAA, CKAD)"
                     value={certInput}
                     onChange={(e) => setCertInput(e.target.value)}
                   />
+                  <span className="form-hint m" style={{ fontSize: '0.8rem', opacity: 0.7, marginTop: 4, display: 'block' }}>
+                    Sample evidence for cloud and framework certifications (capped at 60 / Supported).
+                  </span>
                 </div>
 
-                {/* 4. Target Role */}
+                {/* 5. Target Role */}
                 <div className="form-group">
                   <label className="form-label">
                     4. Target Role or Job Description <span className="req">*</span>
@@ -1270,6 +1332,36 @@ export default function Verify() {
                   </div>
                 </div>
 
+                {/* RESUME DETAILS & EXTRACTED SCOPE */}
+                <div className="resume-details-card glass" style={{ padding: '20px', margin: '24px 0', borderRadius: '12px' }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '12px', marginBottom: '14px' }}>
+                    <h3 style={{ margin: 0, fontSize: '1.05rem' }}>Resume details &amp; extracted scope</h3>
+                    <span className="chip sm S">Sample evidence</span>
+                  </div>
+                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '16px', fontSize: '0.88rem' }}>
+                    <div>
+                      <span className="k m" style={{ display: 'block', fontSize: '0.72rem', opacity: 0.7 }}>PARSED NAME</span>
+                      <strong>{passportData.passport.candidateName || user?.name || 'Alex Rivera'}</strong>
+                    </div>
+                    <div>
+                      <span className="k m" style={{ display: 'block', fontSize: '0.72rem', opacity: 0.7 }}>TARGET ROLE</span>
+                      <strong>{passportData.passport.targetRole}</strong>
+                    </div>
+                    <div>
+                      <span className="k m" style={{ display: 'block', fontSize: '0.72rem', opacity: 0.7 }}>PAST EXPERIENCE</span>
+                      <p style={{ margin: '2px 0 0', fontSize: '0.84rem' }}>
+                        {user?.profile?.experience && Array.isArray(user.profile.experience) && user.profile.experience[0]
+                          ? `${user.profile.experience[0].title} at ${user.profile.experience[0].org} (${user.profile.experience[0].duration})`
+                          : (readData?.resumeDetails?.experience || 'Software Engineer · Verified Engineering History')}
+                      </p>
+                    </div>
+                    <div>
+                      <span className="k m" style={{ display: 'block', fontSize: '0.72rem', opacity: 0.7 }}>SKILLS DETECTED</span>
+                      <strong>{passportData.passport.skills.length} skills extracted</strong>
+                    </div>
+                  </div>
+                </div>
+
                 {/* RESULT PERSPECTIVE TABS */}
                 <div className="result-tabs-nav">
                   {['Candidate', 'Recruiter', 'Placement'].map((t) => (
@@ -1344,9 +1436,16 @@ export default function Verify() {
                   )}
                 </div>
 
-                <div className="result-actions-footer">
-                  <Link to="/" className="b g sm">Return to home</Link>
-                  <button type="button" className="b sm" onClick={() => window.print()}>Print passport record</button>
+                <div className="result-actions-footer" style={{ display: 'flex', gap: '10px', flexWrap: 'wrap', marginTop: '24px' }}>
+                  <Link to="/dashboard" className="b sm">
+                    Go to dashboard <span className="btn-arrow" aria-hidden="true">-&gt;</span>
+                  </Link>
+                  <button type="button" className="b g sm" onClick={() => window.print()}>
+                    Print passport record
+                  </button>
+                  <Link to="/" className="b g sm">
+                    Return to home
+                  </Link>
                 </div>
               </div>
             )}

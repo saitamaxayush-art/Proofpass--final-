@@ -5,6 +5,7 @@ import { ScrollTrigger } from 'gsap/ScrollTrigger'
 import { DATA, L, PIPELINE, SOURCES, STATES, VIEWS, WEIGHTS } from '../data.js'
 import { RM } from '../lib.js'
 import Seg from './Seg.jsx'
+import { useAuth } from '../auth/AuthContext.jsx'
 
 gsap.registerPlugin(ScrollTrigger)
 
@@ -239,6 +240,9 @@ export default function Home() {
     return () => ctx && ctx.revert()
   }, [])
 
+  const { user } = useAuth()
+  const ctaDestination = !user ? '/login?tab=signup' : user.role === 'recruiter' ? '/recruiter' : '/dashboard'
+
   const v = VIEWS[tab]
 
   return (
@@ -257,7 +261,7 @@ export default function Home() {
               ProofPass checks each skill on a resume against real commits and certificates, then labels it Verified, Supported, Claimed or Contradicted. Recruiters see the evidence behind every label.
             </p>
             <div className="hero-actions">
-              <Link className="b" to="/verify">
+              <Link className="b" to={ctaDestination}>
                 Verify a passport <span className="btn-arrow" aria-hidden="true">-&gt;</span>
               </Link>
               <a className="b g" href="#pipeline">See how it works</a>
@@ -351,7 +355,7 @@ export default function Home() {
             <h2>See the evidence behind every skill.</h2>
             <p>Candidates get a plan. Recruiters get evidence, not a single hire score.</p>
           </div>
-          <Link className="b" to="/verify" data-rv>
+          <Link className="b" to={ctaDestination} data-rv>
             Run verification <span className="btn-arrow" aria-hidden="true">-&gt;</span>
           </Link>
         </div>
