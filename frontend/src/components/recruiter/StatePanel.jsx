@@ -65,9 +65,6 @@ export default function StatePanel({
           <div className="sp-skill-meta-line">
             <strong className="sp-skill-name">{skill.name}</strong>
             <span className="sp-importance-word">{importanceLabel}</span>
-            {skill.level !== undefined && (
-              <span className="sp-level-word">Level {skill.level}</span>
-            )}
             {formatConfidence(confVal) && (
               <span className="sp-conf-word">{formatConfidence(confVal)}</span>
             )}

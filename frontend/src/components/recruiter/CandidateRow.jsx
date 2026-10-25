@@ -97,15 +97,6 @@ export default function CandidateRow({
                 <span className="lb-tag">Recruiter generated</span>
               )}
             </div>
-
-            {candidate.decidingFactor && (
-              <div className="lb-tie-note">
-                ↳ {candidate.decidingFactor}
-              </div>
-            )}
-            {tieNote && (
-              <div className="lb-tie-note">{tieNote}</div>
-            )}
           </div>
         </div>
       </div>

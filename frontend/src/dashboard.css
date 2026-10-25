@@ -282,18 +282,66 @@
   background: rgba(181, 70, 16, 0.02);
 }
 
-/* Expandable Evidence Row */
+/* Expandable Evidence Row / Inspect Audit Button */
 .evidence-expand-btn {
-  background: none;
-  border: none;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  background: var(--surface-2);
+  border: 1.5px solid var(--accent);
   color: var(--accent);
-  font-size: 0.8rem;
-  font-family: var(--mono);
+  font-size: 0.83rem;
+  font-weight: 600;
+  font-family: var(--font);
   cursor: pointer;
-  padding: 0;
-  text-decoration: underline;
-  margin-top: 4px;
-  display: inline-block;
+  padding: 7px 14px;
+  border-radius: 8px;
+  text-decoration: none !important;
+  margin-top: 8px;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08);
+  transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+  white-space: nowrap;
+}
+
+.evidence-expand-btn:hover {
+  background: var(--accent);
+  color: var(--on-accent, #fff) !important;
+  border-color: var(--accent);
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(181, 70, 16, 0.25);
+  text-decoration: none !important;
+}
+
+.evidence-expand-btn:active {
+  transform: translateY(0);
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.1);
+}
+
+.evidence-expand-btn:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 3px var(--accent-tint), 0 2px 6px rgba(0, 0, 0, 0.15);
+}
+
+.evidence-expand-btn[aria-expanded="true"] {
+  background: var(--surface-2);
+  color: var(--ink) !important;
+  border-color: var(--line);
+}
+
+.evidence-expand-btn[aria-expanded="true"]:hover {
+  background: var(--surface);
+  border-color: var(--accent);
+  color: var(--accent) !important;
+}
+
+.evidence-expand-btn svg {
+  flex-shrink: 0;
+}
+
+.evidence-expand-btn .expand-chevron {
+  font-size: 0.85rem;
+  font-weight: 700;
+  line-height: 1;
 }
 
 .evidence-expanded-box {
