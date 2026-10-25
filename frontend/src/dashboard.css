@@ -3274,4 +3274,221 @@
   margin-top: 8px;
 }
 
+/* ==========================================================================
+   ProofPass States Explainer & Credibility Matrix
+   ========================================================================== */
+
+.lb-states-explainer-card {
+  padding: 20px 24px;
+  margin-bottom: 22px;
+  border-radius: 12px;
+  border: 1px solid var(--line);
+  background: var(--surface);
+  transition: all 0.25s var(--ease);
+}
+
+.lb-states-explainer-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 16px;
+  flex-wrap: wrap;
+}
+
+.lb-states-explainer-title-group {
+  max-width: 680px;
+}
+
+.lb-states-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(230px, 1fr));
+  gap: 14px;
+  margin-top: 18px;
+}
+
+.lb-state-card {
+  border-radius: 10px;
+  padding: 14px 16px;
+  background: var(--surface-2);
+  border: 1px solid var(--line);
+  display: flex;
+  flex-direction: column;
+  transition: transform 0.2s var(--ease), box-shadow 0.2s var(--ease);
+}
+
+.lb-state-card:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.06);
+}
+
+.lb-state-card.card-v {
+  border-left: 3px solid var(--st-v);
+  background: rgba(42, 117, 80, 0.04);
+}
+
+.lb-state-card.card-s {
+  border-left: 3px solid var(--st-s);
+  background: rgba(26, 95, 122, 0.04);
+}
+
+.lb-state-card.card-c {
+  border-left: 3px solid var(--st-c);
+  background: rgba(184, 134, 11, 0.04);
+}
+
+.lb-state-card.card-x {
+  border-left: 3px solid var(--st-x);
+  background: rgba(184, 51, 42, 0.05);
+}
+
+.lb-state-card-top {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 8px;
+}
+
+.lb-state-ceiling-tag {
+  font-family: var(--mono);
+  font-size: 0.72rem;
+  font-weight: 700;
+  padding: 2px 7px;
+  border-radius: 4px;
+}
+
+.lb-state-ceiling-tag.ceiling-v {
+  background: rgba(42, 117, 80, 0.14);
+  color: var(--st-v);
+}
+
+.lb-state-ceiling-tag.ceiling-s {
+  background: rgba(26, 95, 122, 0.14);
+  color: var(--st-s);
+}
+
+.lb-state-ceiling-tag.ceiling-c {
+  background: rgba(184, 134, 11, 0.14);
+  color: var(--st-c);
+}
+
+.lb-state-ceiling-tag.ceiling-x {
+  background: rgba(184, 51, 42, 0.14);
+  color: var(--st-x);
+}
+
+.lb-state-name {
+  font-size: 0.88rem;
+  font-weight: 700;
+  color: var(--ink);
+  margin: 0 0 6px;
+}
+
+.lb-state-text {
+  font-size: 0.80rem;
+  color: var(--muted);
+  line-height: 1.45;
+  margin: 0 0 10px;
+  flex: 1 1 auto;
+}
+
+.lb-state-example {
+  font-size: 0.74rem;
+  color: var(--ink);
+  background: var(--surface);
+  border: 1px solid var(--line);
+  padding: 6px 8px;
+  border-radius: 6px;
+  font-family: var(--mono);
+}
+
+/* ==========================================================================
+   Newly Added Candidate Banner & Row Highlight
+   ========================================================================== */
+
+.newly-added-banner {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 14px;
+  padding: 12px 18px;
+  border-radius: 8px;
+  background: rgba(56, 189, 248, 0.1);
+  border: 1px solid rgba(56, 189, 248, 0.35);
+  margin-bottom: 18px;
+  color: var(--ink);
+  font-size: 0.85rem;
+  animation: fadeInBanner 0.3s ease;
+}
+
+@keyframes fadeInBanner {
+  from { opacity: 0; transform: translateY(-4px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+.newly-added-banner-content {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.newly-added-icon {
+  font-size: 1.15rem;
+}
+
+.lb-row-newly-added {
+  background: rgba(56, 189, 248, 0.05) !important;
+  border-left: 3px solid var(--accent) !important;
+  transition: background 0.3s var(--ease);
+}
+
+.lb-tag-new {
+  background: var(--accent) !important;
+  color: var(--on-accent) !important;
+  font-weight: 700 !important;
+  border-radius: 4px;
+  padding: 2px 7px;
+  font-size: 0.68rem;
+  font-family: var(--mono);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+/* ==========================================================================
+   No Passport Tab & Direct Generation Styles
+   ========================================================================== */
+
+.nopassport-disclaimer {
+  font-size: 0.82rem;
+  padding: 10px 14px;
+  background: rgba(245, 158, 11, 0.08);
+  border: 1px solid rgba(245, 158, 11, 0.24);
+  border-radius: 6px;
+  color: var(--ink);
+}
+
+.sticky-selection-bar {
+  position: sticky;
+  bottom: 16px;
+  left: 0;
+  right: 0;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 14px;
+  padding: 12px 20px;
+  background: var(--surface);
+  border: 1px solid var(--accent);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.16);
+  border-radius: 10px;
+  z-index: 20;
+  margin-top: 16px;
+  animation: slideUpBar 0.25s var(--ease);
+}
+
+@keyframes slideUpBar {
+  from { opacity: 0; transform: translateY(12px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+
 

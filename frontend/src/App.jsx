@@ -98,7 +98,7 @@ function AppShell() {
     }
   }, [])
 
-  // New page: go to top, close the menu, reset header visibility
+  // New page: go to top, close the menu, reset header visibility and clear any nav offsets
   useEffect(() => {
     if (scroller.lenis) scroller.lenis.scrollTo(0, { immediate: true, force: true })
     else window.scrollTo(0, 0)
@@ -106,6 +106,13 @@ function AppShell() {
     if (headerRef.current) {
       headerRef.current.classList.remove('hide')
       headerRef.current.classList.toggle('scrolled', window.scrollY > 8)
+    }
+    if (navRef.current) {
+      const links = navRef.current.querySelectorAll('a')
+      gsap.set(links, { clearProps: 'all' })
+    }
+    if (actionsRef.current) {
+      gsap.set(actionsRef.current.children, { clearProps: 'all' })
     }
     hiddenRef.current = false
     scrolledRef.current = window.scrollY > 8
@@ -115,7 +122,12 @@ function AppShell() {
 
   // Nav links emerge from the logo and title on full page load
   useLayoutEffect(() => {
-    if (hasPlayedNavIntro || RM || window.innerWidth <= 820) return
+    if (hasPlayedNavIntro || RM || window.innerWidth <= 820 || !home) {
+      if (navRef.current) {
+        gsap.set(navRef.current.querySelectorAll('a'), { clearProps: 'all' })
+      }
+      return
+    }
 
     let cancelled = false
     document.fonts.ready.then(() => {
@@ -210,6 +222,12 @@ function AppShell() {
 
     return () => {
       cancelled = true
+      if (navRef.current) {
+        gsap.set(navRef.current.querySelectorAll('a'), { clearProps: 'all' })
+      }
+      if (actionsRef.current) {
+        gsap.set(actionsRef.current.children, { clearProps: 'all' })
+      }
     }
   }, [])
 

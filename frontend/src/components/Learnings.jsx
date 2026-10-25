@@ -226,13 +226,14 @@ export default function Learnings() {
               {/* Filter Tabs */}
               <div style={{ marginTop: 20, display: 'flex', justifyContent: 'flex-start' }}>
                 <Seg
-                  options={[
-                    ['all', `All (${roadmaps.length})`],
-                    ['active', `In progress (${roadmaps.filter((r) => r.status !== 'completed').length})`],
-                    ['completed', `Completed (${roadmaps.filter((r) => r.status === 'completed').length})`],
+                  items={[
+                    { id: 'all', label: `All (${roadmaps.length})` },
+                    { id: 'active', label: `In progress (${roadmaps.filter((r) => r.status !== 'completed').length})` },
+                    { id: 'completed', label: `Completed (${roadmaps.filter((r) => r.status === 'completed').length})` },
                   ]}
                   value={statusFilter}
                   onChange={setStatusFilter}
+                  label="Filter Roadmaps"
                 />
               </div>
             </div>

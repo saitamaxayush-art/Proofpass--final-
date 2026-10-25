@@ -20,6 +20,7 @@ import { RM } from '../lib.js'
 import RoleHeader from './recruiter/RoleHeader.jsx'
 import RoleSummary from './recruiter/RoleSummary.jsx'
 import LeaderboardToolbar from './recruiter/LeaderboardToolbar.jsx'
+import LeaderboardStatesExplainer from './recruiter/LeaderboardStatesExplainer.jsx'
 import CandidateRow from './recruiter/CandidateRow.jsx'
 import CandidateDrawer from './recruiter/CandidateDrawer.jsx'
 import { NoPassportTab } from './recruiter/NoPassportTab.jsx'
@@ -34,6 +35,8 @@ export default function RecruiterRoleDetail() {
   const [notice, setNotice] = useState(null)
   const [openPanels, setOpenPanels] = useState({}) // { [candidateId]: 'V' | 'S' | 'C' | 'X' | null }
   const [liveAnnouncement, setLiveAnnouncement] = useState('')
+  const [showStatesExplainer, setShowStatesExplainer] = useState(true)
+  const [newlyAddedIds, setNewlyAddedIds] = useState(new Set())
 
   // Leaderboard Toolbar Filters & Sorting
   const [searchQuery, setSearchQuery] = useState('')
@@ -140,6 +143,18 @@ export default function RecruiterRoleDetail() {
 
   const [isSavingRole, setIsSavingRole] = useState(false)
 
+  const handleDirectGeneratePassports = async (generatedIds) => {
+    setNewlyAddedIds((prev) => new Set([...prev, ...generatedIds]))
+    await loadRoleData()
+    setActiveTab('leaderboard')
+    setNotice(
+      `Directly generated passports for ${generatedIds.length} candidate(s). Promoted to Leaderboard and highlighted below.`
+    )
+    setLiveAnnouncement(
+      `Promoted ${generatedIds.length} candidate(s) to Leaderboard.`
+    )
+  }
+
   const handleUpdateRole = async (payload) => {
     setIsSavingRole(true)
     try {
@@ -154,46 +169,95 @@ export default function RecruiterRoleDetail() {
   }
 
   // Load role and applicants
-  const loadRoleData = async () => {
+  const loadRoleData = async (silent = false) => {
     try {
+      if (!silent) setLoading(true)
       const r = await getRole(roleId)
       setRole(r)
 
       const { withPassport, noPassport } = await listApplicantsForRole(roleId)
 
-      // Check if browser has an active applicant passport fuzzy-matching this role
+      // Fetch all stored passports from backend database and browser
       const browserPassports = await listPassports()
-      const matchingLive = browserPassports.find(
-        (p) =>
-          !p.revoked &&
-          p.targetRole &&
-          (p.targetRole.toLowerCase().includes(r.title.toLowerCase().slice(0, 10)) ||
-            r.title.toLowerCase().includes(p.targetRole.toLowerCase().slice(0, 10)))
-      )
 
       let combinedWithPassport = [...withPassport]
-      if (matchingLive && !combinedWithPassport.some((a) => a.passport?.id === matchingLive.id)) {
-        combinedWithPassport.unshift({
-          id: `live_demo_${matchingLive.id}`,
-          name: matchingLive.candidate || 'Live Demo Applicant',
-          email: 'live.applicant@browser.local',
-          hasPassport: true,
-          passport: matchingLive,
-          isLiveDemo: true,
+      const existingPassportIds = new Set(
+        combinedWithPassport.map((a) => a.passport?.id || a.passport?.passport_id || a.id)
+      )
+
+      // Extract role skills (lowercase) for smart matching
+      const roleSkillNames = (r.requiredSkills || []).map((req) =>
+        (req.skill || req.name || '').toLowerCase().trim()
+      )
+      const roleTitleClean = (r.title || '').toLowerCase().trim()
+
+      for (const p of browserPassports) {
+        if (p.revoked) continue
+
+        const pId = p.id || p.passport_id
+        if (!pId || existingPassportIds.has(pId) || existingPassportIds.has(`live_${pId}`)) {
+          continue
+        }
+
+        const pRoleClean = (p.targetRole || p.target_role || '').toLowerCase().trim()
+        const pSkills = p.skills || []
+
+        // Match if:
+        // 1) Target role overlaps with current role title
+        // 2) Any passport skill overlaps with role required skills
+        // 3) Or target role is generic / unassigned / freshly generated
+        const hasRoleOverlap =
+          pRoleClean &&
+          (roleTitleClean.includes(pRoleClean.slice(0, 10)) ||
+            pRoleClean.includes(roleTitleClean.slice(0, 10)))
+
+        const hasSkillOverlap = pSkills.some((s) => {
+          const sName = (s.skill || s.name || '').toLowerCase().trim()
+          return roleSkillNames.includes(sName)
         })
+
+        // Always show live candidates if role or skill matches, or default candidate pool
+        if (
+          hasRoleOverlap ||
+          hasSkillOverlap ||
+          !pRoleClean ||
+          pRoleClean === 'software engineer' ||
+          pRoleClean === 'full-stack engineer'
+        ) {
+          combinedWithPassport.unshift({
+            id: `live_${pId}`,
+            name: p.candidate || p.candidate_name || (p.github_login ? `@${p.github_login}` : 'Applicant'),
+            email:
+              p.email ||
+              `${(p.candidate || p.github_login || 'applicant').toLowerCase().replace(/\s+/g, '.')}@proofpass.live`,
+            hasPassport: true,
+            passport: p,
+            isLiveDemo: true,
+            skills: pSkills,
+          })
+          existingPassportIds.add(pId)
+          existingPassportIds.add(`live_${pId}`)
+        }
       }
 
       setApplicantsWithPassport(combinedWithPassport)
       setApplicantsNoPassport(noPassport)
-      setLoading(false)
+      if (!silent) setLoading(false)
     } catch (err) {
-      setNotice(err.message)
-      setLoading(false)
+      if (!silent) {
+        setNotice(err.message)
+        setLoading(false)
+      }
     }
   }
 
   useEffect(() => {
     loadRoleData()
+    // Dynamic polling every 2.5s to sync newly generated passports across browsers
+    const interval = setInterval(() => {
+      loadRoleData(true)
+    }, 2500)
+    return () => clearInterval(interval)
   }, [roleId])
 
   // Ranked Leaderboard computation using rankApplicants pure function
@@ -452,6 +516,31 @@ export default function RecruiterRoleDetail() {
               {liveAnnouncement}
             </div>
 
+            {/* States Explainer Card: Clear, prominent, and readable */}
+            <LeaderboardStatesExplainer
+              isOpen={showStatesExplainer}
+              onToggle={() => setShowStatesExplainer((prev) => !prev)}
+            />
+
+            {/* Newly Added Candidates Banner */}
+            {newlyAddedIds.size > 0 && (
+              <div className="newly-added-banner" role="status">
+                <div className="newly-added-banner-content">
+                  <span className="newly-added-icon">⚡</span>
+                  <span>
+                    <strong>{newlyAddedIds.size} candidate(s)</strong> have been directly generated and promoted to the leaderboard! Highlighted below.
+                  </span>
+                </div>
+                <button
+                  type="button"
+                  className="b sm g"
+                  onClick={() => setNewlyAddedIds(new Set())}
+                >
+                  Dismiss highlights
+                </button>
+              </div>
+            )}
+
             {/* Step 5: Leaderboard Toolbar */}
             <LeaderboardToolbar
               searchQuery={searchQuery}
@@ -464,6 +553,8 @@ export default function RecruiterRoleDetail() {
               onToggleHideNames={handleToggleHideNames}
               totalCount={rankedCandidates.length}
               visibleCount={displayedCandidates.length}
+              showStatesExplainer={showStatesExplainer}
+              onToggleStatesExplainer={() => setShowStatesExplainer((prev) => !prev)}
               onResetFilters={() => {
                 setSearchQuery('')
                 setActiveFilter('all')
@@ -541,6 +632,7 @@ export default function RecruiterRoleDetail() {
                           canCompare={compareIds.size < 3}
                           onToggleCompare={handleToggleCompare}
                           tieNote={tieNote}
+                          isNewlyAdded={newlyAddedIds.has(c.id)}
                         />
                       )
                     })}
@@ -559,6 +651,7 @@ export default function RecruiterRoleDetail() {
             roleId={roleId}
             onReloadRole={loadRoleData}
             onNavigateTab={setActiveTab}
+            onDirectGeneratePassports={handleDirectGeneratePassports}
             setNotice={setNotice}
           />
         )}

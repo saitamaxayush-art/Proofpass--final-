@@ -4,7 +4,6 @@
  * anonymous names toggle, showing count, reset action, and states info popover.
  */
 
-import { useState, useRef, useEffect } from 'react'
 
 export default function LeaderboardToolbar({
   searchQuery,
@@ -18,44 +17,11 @@ export default function LeaderboardToolbar({
   totalCount,
   visibleCount,
   onResetFilters,
+  showStatesExplainer = false,
+  onToggleStatesExplainer,
 }) {
-  const [showPopover, setShowPopover] = useState(false)
-  const popoverRef = useRef(null)
-  const triggerRef = useRef(null)
-
   const isFiltered =
     searchQuery.trim() !== '' || filterValue !== 'all' || sortValue !== 'rank'
-
-  // Dismiss popover on outside click or Escape key
-  useEffect(() => {
-    if (!showPopover) return
-
-    const handleKeyDown = (e) => {
-      if (e.key === 'Escape') {
-        setShowPopover(false)
-        triggerRef.current?.focus()
-      }
-    }
-
-    const handleClickOutside = (e) => {
-      if (
-        popoverRef.current &&
-        !popoverRef.current.contains(e.target) &&
-        triggerRef.current &&
-        !triggerRef.current.contains(e.target)
-      ) {
-        setShowPopover(false)
-      }
-    }
-
-    window.addEventListener('keydown', handleKeyDown)
-    document.addEventListener('mousedown', handleClickOutside)
-    return () => {
-      window.removeEventListener('keydown', handleKeyDown)
-      document.removeEventListener('mousedown', handleClickOutside)
-    }
-  }, [showPopover])
-
   return (
     <div className="lb-toolbar-row" role="region" aria-label="Leaderboard filters and controls">
       {/* 1. Search by Candidate Name */}
@@ -105,68 +71,17 @@ export default function LeaderboardToolbar({
         <span>Hide candidate names</span>
       </label>
 
-      {/* 5. What do the states mean? Info Popover */}
+      {/* 5. What do the states mean? Explainer Toggle */}
       <div className="lb-info-wrap">
         <button
-          ref={triggerRef}
           type="button"
-          className="lb-info-trigger"
-          onClick={() => setShowPopover((prev) => !prev)}
-          aria-expanded={showPopover}
-          aria-haspopup="dialog"
+          className={`lb-info-trigger ${showStatesExplainer ? 'lb-info-trigger-active' : ''}`}
+          onClick={onToggleStatesExplainer}
+          aria-expanded={showStatesExplainer}
           aria-label="What do the skill states mean?"
         >
-          <span>ℹ What do states mean?</span>
+          <span>{showStatesExplainer ? '📖 Hide states guide' : 'ℹ What do states mean?'}</span>
         </button>
-
-        {showPopover && (
-          <div
-            ref={popoverRef}
-            className="lb-info-popover"
-            role="dialog"
-            aria-label="Skill states legend"
-          >
-            <div className="lb-info-popover-item">
-              <div className="lb-info-popover-header">
-                <span className="lb-state-swatch swatch-v" aria-hidden="true" />
-                <span>Verified</span>
-              </div>
-              <div className="lb-info-popover-desc">
-                Proven by evidence and a passed check.
-              </div>
-            </div>
-
-            <div className="lb-info-popover-item">
-              <div className="lb-info-popover-header">
-                <span className="lb-state-swatch swatch-s" aria-hidden="true" />
-                <span>Supported</span>
-              </div>
-              <div className="lb-info-popover-desc">
-                Evidence found from links or files.
-              </div>
-            </div>
-
-            <div className="lb-info-popover-item">
-              <div className="lb-info-popover-header">
-                <span className="lb-state-swatch swatch-c" aria-hidden="true" />
-                <span>Claimed</span>
-              </div>
-              <div className="lb-info-popover-desc">
-                Self-reported on the resume only.
-              </div>
-            </div>
-
-            <div className="lb-info-popover-item">
-              <div className="lb-info-popover-header">
-                <span className="lb-state-swatch swatch-x" aria-hidden="true" />
-                <span className="text-contradicted">Contradicted</span>
-              </div>
-              <div className="lb-info-popover-desc">
-                The evidence conflicts with the claim.
-              </div>
-            </div>
-          </div>
-        )}
       </div>
 
       {/* 6. Showing X of Y and Reset link */}

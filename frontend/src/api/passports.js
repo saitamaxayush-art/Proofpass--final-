@@ -25,15 +25,76 @@ function saveStoredPassports(passports) {
 }
 
 /**
- * List all passports associated with a user or globally in the prototype.
- * Future backend endpoint: GET /api/v1/passports
+ * Normalizes passport payload from either backend API or client storage.
+ */
+function normalizePassport(p) {
+  if (!p) return null
+  const id = p.id || p.passport_id
+  if (!id) return null
+
+  let skills = p.skills || []
+  if (Array.isArray(skills)) {
+    skills = skills.map((s) => ({
+      skill: s.skill || s.name || '',
+      state: s.state || (s.claim_state === 'Verified' ? 'V' : s.claim_state === 'Supported' ? 'S' : s.claim_state === 'Contradicted' ? 'X' : 'C'),
+      level: s.level || 2,
+      evidence: s.evidence || (s.evidence_chain?.[0]?.detail) || 'Verified evidence',
+      rationale: s.rationale || s.why || '',
+      evidenceDetails: s.evidenceDetails || [],
+    }))
+  }
+
+  return {
+    ...p,
+    id,
+    passport_id: id,
+    candidate: p.candidate || p.candidate_name || 'Applicant',
+    targetRole: p.targetRole || p.target_role || 'Software Engineer',
+    issuedAt: p.issuedAt || p.created_at || new Date().toISOString(),
+    hash: p.hash || p.sha256_hash || `hash_${id}`,
+    skills,
+    revoked: Boolean(p.revoked),
+  }
+}
+
+/**
+ * List all passports associated with a user or globally across all browsers.
+ * Fetches live from the backend server (/api/v1/passports) and merges with local storage.
  *
  * @param {string} [userId]
  * @returns {Promise<Array>}
  */
 export async function listPassports(userId) {
-  await new Promise((res) => setTimeout(res, 50))
-  const all = loadStoredPassports()
+  let serverPassports = []
+  try {
+    const res = await fetch('/api/v1/passports')
+    if (res.ok) {
+      serverPassports = await res.json()
+    }
+  } catch {
+    // Network / offline fallback
+  }
+
+  const local = loadStoredPassports()
+  const combinedMap = new Map()
+
+  if (Array.isArray(serverPassports)) {
+    serverPassports.forEach((p) => {
+      const norm = normalizePassport(p)
+      if (norm) combinedMap.set(norm.id, norm)
+    })
+  }
+
+  if (Array.isArray(local)) {
+    local.forEach((p) => {
+      const norm = normalizePassport(p)
+      if (norm && !combinedMap.has(norm.id)) {
+        combinedMap.set(norm.id, norm)
+      }
+    })
+  }
+
+  const all = Array.from(combinedMap.values())
   if (userId) {
     return all.filter((p) => p.userId === userId)
   }
@@ -42,67 +103,78 @@ export async function listPassports(userId) {
 
 /**
  * Retrieve a single passport by ID.
- * Future backend endpoint: GET /api/v1/passports/:id
+ * Checks local storage and queries /api/v1/passports/:id.
  *
  * @param {string} passportId
  * @returns {Promise<Object>}
  */
 export async function getPassport(passportId) {
-  await new Promise((res) => setTimeout(res, 40))
-  const all = loadStoredPassports()
-  const found = all.find((p) => p.id === passportId)
-  if (!found) {
-    throw new Error(`Passport with ID "${passportId}" not found.`)
+  const local = loadStoredPassports()
+  const foundLocal = local.find((p) => p.id === passportId || p.passport_id === passportId)
+  if (foundLocal) return normalizePassport(foundLocal)
+
+  try {
+    const res = await fetch(`/api/v1/passports/${passportId}`)
+    if (res.ok) {
+      const data = await res.json()
+      if (data.passport) {
+        return normalizePassport({
+          ...data.passport,
+          id: data.passport_id || data.passport.id || passportId,
+          passport_id: data.passport_id || passportId,
+          targetRole: data.target_role || data.passport.target_role,
+          sha256_hash: data.sha256_hash || data.passport.sha256_hash,
+          created_at: data.created_at || data.passport.created_at,
+        })
+      }
+      return normalizePassport(data)
+    }
+  } catch {
+    // Network error
   }
-  return found
+
+  throw new Error(`Passport with ID "${passportId}" not found.`)
 }
 
 /**
- * Save an issued skill passport.
- * Future backend endpoint: POST /api/v1/passports
+ * Save an issued skill passport into local storage AND sync to the backend API.
+ * Ensures passports generated in one browser are immediately visible to recruiters in another browser.
  *
- * // BACKEND: POST /api/v1/passports must accept and persist the rich evidenceDetails array
- * // attached to each skill:
- * // Array<{
- * //   source: 'github' | 'resume' | 'certificate' | 'leetcode' | 'assessment',
- * //   label: string,
- * //   file: string | null,
- * //   commit: string | null, // 7-char commit hash
- * //   url: string | null,
- * //   excerpt: string, // Real verbatim excerpt from repository file or resume
- * //   excerptSource: 'file' | 'resume' | 'sample',
- * //   matchedTerm: string,
- * //   contentHash: string | null, // 8-char SHA-256 snippet
- * //   flagReason: string | null,
- * //   confidence: { value: number, label: 'Low' | 'Medium' | 'High', factors: Array<{ label: string, value: string }> },
- * //   fetchedAt: string // ISO date string
- * // }>
- * // NOTE: Cryptographic SHA-256 integrity covers [skill, state, evidence] text.
- * // evidenceDetails are display metadata that enrich candidate audit trails.
- *
- * @param {Object} passport - Full passport payload { id, candidate, targetRole, issuedAt, hash, skills, ... }
+ * @param {Object} passport - Full passport payload
  * @param {string} [userId]
  * @returns {Promise<Object>}
  */
 export async function savePassport(passport, userId) {
-  await new Promise((res) => setTimeout(res, 60))
-  const all = loadStoredPassports()
-  const existingIdx = all.findIndex((p) => p.id === passport.id)
-
-  const record = {
+  const local = loadStoredPassports()
+  const pid = passport.id || passport.passport_id || `PP-${Date.now()}`
+  const record = normalizePassport({
     ...passport,
+    id: pid,
     userId: userId || passport.userId || 'usr_anonymous',
     revoked: passport.revoked || false,
     updatedAt: new Date().toISOString(),
-  }
+  })
 
+  // 1. Update local storage
+  const existingIdx = local.findIndex((p) => p.id === pid)
   if (existingIdx >= 0) {
-    all[existingIdx] = record
+    local[existingIdx] = record
   } else {
-    all.unshift(record)
+    local.unshift(record)
+  }
+  saveStoredPassports(local)
+
+  // 2. Broadcast / sync to shared backend database so other browser profiles see it
+  try {
+    await fetch('/api/v1/passports', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(record),
+    })
+  } catch (err) {
+    console.warn('Failed to sync passport to backend server:', err)
   }
 
-  saveStoredPassports(all)
   return record
 }
 

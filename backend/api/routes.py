@@ -483,6 +483,82 @@ async def verify_candidate(
     )
 
 
+@router.get("/passports")
+def list_all_passports(db: Session = Depends(get_db)):
+    """
+    Lists all stored skill passports across all candidates, browsers, and sessions.
+    Allows real-time cross-browser synchronization for recruiter leaderboards.
+    """
+    records = db.query(PassportRecord).order_by(PassportRecord.created_at.desc()).all()
+    results = []
+    for record in records:
+        try:
+            payload = json.loads(record.payload_json)
+            if isinstance(payload, dict):
+                payload["id"] = payload.get("id") or record.passport_id
+                payload["passport_id"] = record.passport_id
+                payload["targetRole"] = payload.get("targetRole") or record.target_role
+                payload["candidate"] = payload.get("candidate") or payload.get("candidate_name") or "Applicant"
+                payload["hash"] = payload.get("hash") or record.sha256_hash
+                payload["status"] = payload.get("status") or record.status
+                payload["issuedAt"] = payload.get("issuedAt") or record.created_at.isoformat()
+                results.append(payload)
+        except Exception:
+            continue
+    return results
+
+
+@router.post("/passports")
+async def save_or_sync_passport(request: Request, db: Session = Depends(get_db)):
+    """
+    Saves or updates a candidate skill passport into the persistent database.
+    Ensures that when a passport is generated in one browser, any recruiter dashboard
+    running in another browser dynamically sees it in the leaderboard.
+    """
+    body = await request.json()
+    passport_id = body.get("id") or body.get("passport_id") or f"PP-{int(datetime.utcnow().timestamp())}"
+    target_role = body.get("targetRole") or body.get("target_role") or "Software Engineer"
+    candidate = body.get("candidate") or body.get("candidate_name") or "Applicant"
+    skills = body.get("skills") or []
+    hash_val = body.get("hash") or body.get("sha256_hash") or f"hash_{passport_id}"
+
+    body["id"] = passport_id
+    body["passport_id"] = passport_id
+    body["candidate"] = candidate
+    body["targetRole"] = target_role
+    body["hash"] = hash_val
+
+    record = db.query(PassportRecord).filter(PassportRecord.passport_id == passport_id).first()
+    if record:
+        record.target_role = target_role
+        record.sha256_hash = hash_val
+        record.payload_json = json.dumps(body)
+        record.claims_json = json.dumps(skills)
+        record.updated_at = datetime.utcnow()
+    else:
+        record = PassportRecord(
+            passport_id=passport_id,
+            target_role=target_role,
+            role_match_score=float(body.get("role_match_score", 0.0) or 0.0),
+            candidate_consent=True,
+            status=body.get("status", "issued"),
+            sha256_hash=hash_val,
+            payload_json=json.dumps(body),
+            claims_json=json.dumps(skills),
+            verification_json=json.dumps({
+                "verified_skills": [s.get("skill") for s in skills if isinstance(s, dict) and s.get("state") in ("V", "S")]
+            }),
+            quiz_questions_json="[]",
+            quiz_history_json="{}",
+            is_demo=bool(body.get("is_demo", False)),
+            created_at=datetime.utcnow(),
+            updated_at=datetime.utcnow(),
+        )
+        db.add(record)
+    db.commit()
+    return body
+
+
 @router.get("/passports/{passport_id}", response_model=PassportDetailResponse)
 def get_passport(passport_id: str, db: Session = Depends(get_db)):
     """Retrieves a stored skill passport by ID."""
@@ -493,7 +569,11 @@ def get_passport(passport_id: str, db: Session = Depends(get_db)):
             detail=f"Passport '{passport_id}' not found.",
         )
 
-    passport_payload = PassportPayload(**json.loads(record.payload_json))
+    raw_payload = json.loads(record.payload_json)
+    try:
+        passport_payload = PassportPayload(**raw_payload)
+    except Exception:
+        passport_payload = raw_payload
 
     return PassportDetailResponse(
         passport_id=record.passport_id,

@@ -129,7 +129,7 @@ class PassportDetailResponse(BaseModel):
         "It does not verify candidate identity or prove claim accuracy."
     )
     is_demo: bool = False
-    passport: PassportPayload
+    passport: PassportPayload | Dict[str, Any]
     created_at: str
     updated_at: str
 

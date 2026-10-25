@@ -23,6 +23,7 @@ export default function CandidateRow({
   canCompare,
   onToggleCompare,
   tieNote,
+  isNewlyAdded = false,
 }) {
   const skillsByState = getSkillsByState(candidate.passport, role)
   const countV = skillsByState.V.length
@@ -58,7 +59,11 @@ export default function CandidateRow({
   ]
 
   return (
-    <li className={`leaderboard-item ${openState ? 'has-open-panel' : ''}`}>
+    <li
+      className={`leaderboard-item ${openState ? 'has-open-panel' : ''} ${
+        isNewlyAdded ? 'lb-row-newly-added' : ''
+      }`}
+    >
       {/* Col 1: Rank */}
       <div className="lb-cell lb-cell-rank">
         <span className="lb-rank-num">{candidate.rank}</span>
@@ -82,10 +87,13 @@ export default function CandidateRow({
                 {displayedName}
               </button>
 
+              {isNewlyAdded && (
+                <span className="lb-tag lb-tag-new">Newly added</span>
+              )}
               {candidate.isLiveDemo && (
                 <span className="lb-tag">Live demo</span>
               )}
-              {candidate.isRecruiterGenerated && (
+              {candidate.isRecruiterGenerated && !isNewlyAdded && (
                 <span className="lb-tag">Recruiter generated</span>
               )}
             </div>

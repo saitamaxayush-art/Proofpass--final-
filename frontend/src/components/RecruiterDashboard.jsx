@@ -9,6 +9,7 @@ import { useEffect, useState, useMemo } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { listRoles, createRole } from '../api/roles.js'
 import { listApplicantsForRole } from '../api/applicants.js'
+import { listPassports } from '../api/passports.js'
 import { rankApplicants } from '../lib/rank.js'
 import { matchSkillsFromText } from '../data/taxonomy.js'
 import JobDescriptionImport from './JobDescriptionImport.jsx'
@@ -50,15 +51,59 @@ export default function RecruiterDashboard() {
   }
 
   // Load roles and compute applicant stats
-  const fetchRolesData = async () => {
+  const fetchRolesData = async (silent = false) => {
     try {
       const allRoles = await listRoles()
       setRoles(allRoles)
+      const browserPassports = await listPassports()
 
       const stats = {}
       for (const r of allRoles) {
         const { withPassport, noPassport } = await listApplicantsForRole(r.id)
-        const ranked = rankApplicants(r, withPassport)
+
+        let combinedWithPassport = [...withPassport]
+        const existingIds = new Set(
+          combinedWithPassport.map((a) => a.passport?.id || a.passport?.passport_id || a.id)
+        )
+        const roleSkillNames = (r.requiredSkills || []).map((req) =>
+          (req.skill || req.name || '').toLowerCase().trim()
+        )
+        const roleTitleClean = (r.title || '').toLowerCase().trim()
+
+        for (const p of browserPassports) {
+          if (p.revoked) continue
+          const pId = p.id || p.passport_id
+          if (!pId || existingIds.has(pId) || existingIds.has(`live_${pId}`)) continue
+
+          const pRoleClean = (p.targetRole || p.target_role || '').toLowerCase().trim()
+          const pSkills = p.skills || []
+          const hasRoleOverlap =
+            pRoleClean &&
+            (roleTitleClean.includes(pRoleClean.slice(0, 10)) ||
+              pRoleClean.includes(roleTitleClean.slice(0, 10)))
+          const hasSkillOverlap = pSkills.some((s) =>
+            roleSkillNames.includes((s.skill || s.name || '').toLowerCase().trim())
+          )
+
+          if (
+            hasRoleOverlap ||
+            hasSkillOverlap ||
+            !pRoleClean ||
+            pRoleClean === 'software engineer' ||
+            pRoleClean === 'full-stack engineer'
+          ) {
+            combinedWithPassport.push({
+              id: `live_${pId}`,
+              name: p.candidate || p.candidate_name || 'Applicant',
+              hasPassport: true,
+              passport: p,
+              skills: pSkills,
+            })
+            existingIds.add(pId)
+          }
+        }
+
+        const ranked = rankApplicants(r, combinedWithPassport)
         const avgMatch =
           ranked.length > 0
             ? Math.round(
@@ -68,9 +113,9 @@ export default function RecruiterDashboard() {
 
         const dateRaw = r.updatedAt || r.createdAt
         stats[r.id] = {
-          withPassport: withPassport.length,
+          withPassport: combinedWithPassport.length,
           noPassport: noPassport.length,
-          total: withPassport.length + noPassport.length,
+          total: combinedWithPassport.length + noPassport.length,
           avgMatch: avgMatch !== null ? `${avgMatch}%` : '—',
           updatedDate: dateRaw
             ? new Date(dateRaw).toLocaleDateString(undefined, {
@@ -82,15 +127,21 @@ export default function RecruiterDashboard() {
         }
       }
       setRoleStats(stats)
-      setLoading(false)
+      if (!silent) setLoading(false)
     } catch (err) {
-      setNotice(`Failed to load roles: ${err.message}`)
-      setLoading(false)
+      if (!silent) {
+        setNotice(`Failed to load roles: ${err.message}`)
+        setLoading(false)
+      }
     }
   }
 
   useEffect(() => {
     fetchRolesData()
+    const interval = setInterval(() => {
+      fetchRolesData(true)
+    }, 3000)
+    return () => clearInterval(interval)
   }, [])
 
   // Skill suggestion from description
