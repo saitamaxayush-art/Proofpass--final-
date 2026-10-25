@@ -10,6 +10,7 @@ import { getRole } from '../api/roles.js'
 import { listApplicantsForRole } from '../api/applicants.js'
 import { listPassports } from '../api/passports.js'
 import { buildComparison } from '../lib/compare.js'
+import { rankApplicants } from '../lib/rank.js'
 import { RM } from '../lib.js'
 
 export default function CandidateCompare() {
@@ -43,17 +44,41 @@ export default function CandidateCompare() {
     }
   }
 
-  // Parse candidate IDs from query string (?ids=a,b,c)
+  // Parse candidate IDs from query string (?ids=a,b,c) or fallback to sessionStorage
   const queryIds = useMemo(() => {
     const raw = searchParams.get('ids')
-    if (!raw) return []
-    return raw
-      .split(',')
-      .map((id) => id.trim())
-      .filter(Boolean)
-  }, [searchParams])
+    let ids = []
+    if (raw) {
+      ids = raw
+        .split(',')
+        .map((id) => id.trim())
+        .filter(Boolean)
+    }
+    if (ids.length === 0) {
+      try {
+        const stored = sessionStorage.getItem(`pp-compare-${roleId}`)
+        if (stored) {
+          const parsed = JSON.parse(stored)
+          if (Array.isArray(parsed) && parsed.length > 0) {
+            ids = parsed.map((id) => String(id).trim()).filter(Boolean)
+          }
+        }
+      } catch {
+        // storage restricted
+      }
+    }
+    return ids
+  }, [searchParams, roleId])
 
-  // Load role and applicants
+  // Sync searchParams if IDs came from sessionStorage
+  useEffect(() => {
+    const raw = searchParams.get('ids')
+    if (!raw && queryIds.length > 0) {
+      setSearchParams({ ids: queryIds.join(',') }, { replace: true })
+    }
+  }, [searchParams, queryIds, setSearchParams])
+
+  // Load role and all evaluated applicants matching the recruiter leaderboard
   useEffect(() => {
     let mounted = true
     async function loadData() {
@@ -64,28 +89,64 @@ export default function CandidateCompare() {
 
         const { withPassport } = await listApplicantsForRole(roleId)
         const browserPassports = await listPassports()
-        const matchingLive = browserPassports.find(
-          (p) =>
-            !p.revoked &&
-            p.targetRole &&
-            (p.targetRole.toLowerCase().includes(r.title.toLowerCase().slice(0, 10)) ||
-              r.title.toLowerCase().includes(p.targetRole.toLowerCase().slice(0, 10)))
+
+        let combinedWithPassport = [...withPassport]
+        const existingPassportIds = new Set(
+          combinedWithPassport.map((a) => a.passport?.id || a.passport?.passport_id || a.id)
         )
 
-        let combined = [...withPassport]
-        if (matchingLive && !combined.some((a) => a.passport?.id === matchingLive.id)) {
-          combined.unshift({
-            id: `live_demo_${matchingLive.id}`,
-            name: matchingLive.candidate || 'Live Demo Applicant',
-            email: 'live.applicant@browser.local',
-            hasPassport: true,
-            passport: matchingLive,
-            isLiveDemo: true,
+        // Extract role skills for smart matching
+        const roleSkillNames = (r.requiredSkills || []).map((req) =>
+          (req.skill || req.name || '').toLowerCase().trim()
+        )
+        const roleTitleClean = (r.title || '').toLowerCase().trim()
+
+        for (const p of browserPassports) {
+          if (p.revoked) continue
+
+          const pId = p.id || p.passport_id
+          if (!pId || existingPassportIds.has(pId) || existingPassportIds.has(`live_${pId}`)) {
+            continue
+          }
+
+          const pRoleClean = (p.targetRole || p.target_role || '').toLowerCase().trim()
+          const pSkills = p.skills || []
+
+          const hasRoleOverlap =
+            pRoleClean &&
+            (roleTitleClean.includes(pRoleClean.slice(0, 10)) ||
+              roleTitleClean.includes(pRoleClean.slice(0, 10)))
+
+          const hasSkillOverlap = pSkills.some((s) => {
+            const sName = (s.skill || s.name || '').toLowerCase().trim()
+            return roleSkillNames.includes(sName)
           })
+
+          if (
+            hasRoleOverlap ||
+            hasSkillOverlap ||
+            !pRoleClean ||
+            pRoleClean === 'software engineer' ||
+            pRoleClean === 'full-stack engineer'
+          ) {
+            combinedWithPassport.unshift({
+              id: `live_${pId}`,
+              name: p.candidate || p.candidate_name || (p.github_login ? `@${p.github_login}` : 'Applicant'),
+              email:
+                p.email ||
+                `${(p.candidate || p.github_login || 'applicant').toLowerCase().replace(/\s+/g, '.')}@proofpass.live`,
+              hasPassport: true,
+              passport: p,
+              isLiveDemo: true,
+              skills: pSkills,
+            })
+            existingPassportIds.add(pId)
+            existingPassportIds.add(`live_${pId}`)
+          }
         }
 
         if (mounted) {
-          setAllApplicantsWithPassport(combined)
+          setAllApplicantsWithPassport(combinedWithPassport)
           setLoading(false)
         }
       } catch (err) {
@@ -102,12 +163,75 @@ export default function CandidateCompare() {
     }
   }, [roleId])
 
-  // Filter valid applicants that match the query IDs
+  // Filter valid applicants that match the query IDs using omni-matching
   const selectedApplicants = useMemo(() => {
-    if (!allApplicantsWithPassport.length || !queryIds.length) return []
-    const applicantMap = new Map()
-    allApplicantsWithPassport.forEach((a) => applicantMap.set(a.id, a))
-    return queryIds.map((id) => applicantMap.get(id)).filter(Boolean)
+    if (!allApplicantsWithPassport.length) return []
+
+    if (queryIds.length > 0) {
+      const matchMap = new Map()
+
+      allApplicantsWithPassport.forEach((a) => {
+        // Direct ID
+        if (a.id) {
+          matchMap.set(String(a.id), a)
+          matchMap.set(String(a.id).toLowerCase(), a)
+        }
+        // Passport IDs
+        if (a.passport?.id) {
+          matchMap.set(String(a.passport.id), a)
+          matchMap.set(String(a.passport.id).toLowerCase(), a)
+          matchMap.set(`live_${a.passport.id}`, a)
+          matchMap.set(`live_demo_${a.passport.id}`, a)
+        }
+        if (a.passport?.passport_id) {
+          matchMap.set(String(a.passport.passport_id), a)
+          matchMap.set(String(a.passport.passport_id).toLowerCase(), a)
+          matchMap.set(`live_${a.passport.passport_id}`, a)
+        }
+        // Prefixes
+        if (a.id && a.id.startsWith('live_')) {
+          const stripped = a.id.replace(/^live_/, '')
+          matchMap.set(stripped, a)
+          matchMap.set(stripped.toLowerCase(), a)
+          matchMap.set(`live_demo_${stripped}`, a)
+        }
+        if (a.id && a.id.startsWith('live_demo_')) {
+          const stripped = a.id.replace(/^live_demo_/, '')
+          matchMap.set(stripped, a)
+          matchMap.set(stripped.toLowerCase(), a)
+          matchMap.set(`live_${stripped}`, a)
+        }
+        // Names and emails
+        if (a.name) {
+          matchMap.set(a.name.toLowerCase().trim(), a)
+        }
+        if (a.email) {
+          matchMap.set(a.email.toLowerCase().trim(), a)
+        }
+      })
+
+      const matched = []
+      const seenIds = new Set()
+
+      queryIds.forEach((qId) => {
+        const clean = String(qId).trim()
+        let found = matchMap.get(clean) || matchMap.get(clean.toLowerCase())
+        if (!found && clean.startsWith('live_')) {
+          found = matchMap.get(clean.replace(/^live_/, ''))
+        }
+        if (!found && clean.startsWith('live_demo_')) {
+          found = matchMap.get(clean.replace(/^live_demo_/, ''))
+        }
+        if (found && !seenIds.has(found.id)) {
+          seenIds.add(found.id)
+          matched.push(found)
+        }
+      })
+
+      return matched
+    }
+
+    return []
   }, [allApplicantsWithPassport, queryIds])
 
   // Pure comparison build
@@ -116,10 +240,35 @@ export default function CandidateCompare() {
     return buildComparison(role, selectedApplicants)
   }, [role, selectedApplicants])
 
+  // Handler: Add a candidate to comparison
+  const handleAddCandidate = (candidateId) => {
+    const cand = allApplicantsWithPassport.find(
+      (a) =>
+        a.id === candidateId ||
+        a.passport?.id === candidateId ||
+        `live_${a.passport?.id}` === candidateId
+    )
+    if (!cand) return
+
+    const currentIds = selectedApplicants.map((a) => a.id)
+    if (currentIds.includes(cand.id) || currentIds.length >= 3) return
+    const nextIds = [...currentIds, cand.id]
+
+    try {
+      sessionStorage.setItem(`pp-compare-${roleId}`, JSON.stringify(nextIds))
+    } catch {
+      // storage unavailable
+    }
+    setSearchParams({ ids: nextIds.join(',') }, { replace: true })
+  }
+
   // Handler: Remove one candidate from comparison
   const handleRemoveCandidate = (candidateId) => {
-    const nextIds = queryIds.filter((id) => id !== candidateId)
-    // Update sessionStorage so returning to leaderboard remembers the new selection
+    const nextApplicants = selectedApplicants.filter(
+      (a) => a.id !== candidateId && a.passport?.id !== candidateId
+    )
+    const nextIds = nextApplicants.map((a) => a.id)
+
     try {
       sessionStorage.setItem(`pp-compare-${roleId}`, JSON.stringify(nextIds))
     } catch {
@@ -131,6 +280,19 @@ export default function CandidateCompare() {
     } else {
       setSearchParams({}, { replace: true })
     }
+  }
+
+  // Quick action: Select Top 2 candidates automatically
+  const handleSelectTopTwo = () => {
+    if (allApplicantsWithPassport.length < 2 || !role) return
+    const ranked = rankApplicants(role, allApplicantsWithPassport)
+    const top2 = ranked.slice(0, 2).map((r) => r.id)
+    try {
+      sessionStorage.setItem(`pp-compare-${roleId}`, JSON.stringify(top2))
+    } catch {
+      // storage unavailable
+    }
+    setSearchParams({ ids: top2.join(',') }, { replace: true })
   }
 
   // Filter skills matrix based on differOnly toggle
@@ -191,19 +353,74 @@ export default function CandidateCompare() {
             <h1 className="dash-title">Candidate Comparison</h1>
           </div>
 
-          <div className="table-card glass card-pad-36 text-center">
-            <div className="empty-icon-lg" aria-hidden="true">
-              ⚖️
+          <div className="table-card glass card-pad-36">
+            <div className="text-center mb-20">
+              <div className="empty-icon-lg" aria-hidden="true">
+                ⚖️
+              </div>
+              <h2 className="section-title-sm mb-8">
+                {selectedApplicants.length === 1
+                  ? 'Select 1 more candidate to compare'
+                  : 'Select at least 2 candidates to compare'}
+              </h2>
+              <p className="text-muted-sm max-w-480 mx-auto mb-16">
+                {selectedApplicants.length === 1
+                  ? `Currently comparing ${selectedApplicants[0].name}. Click another candidate below to generate the side-by-side audit matrix.`
+                  : 'Pick 2 or 3 evaluated candidates with verified skill passports below to compare side-by-side:'}
+              </p>
+              {allApplicantsWithPassport.length >= 2 && (
+                <button
+                  type="button"
+                  className="b sm primary mb-12"
+                  onClick={handleSelectTopTwo}
+                >
+                  ⚡ Compare Top 2 Ranked Candidates
+                </button>
+              )}
             </div>
-            <h2 className="section-title-sm mb-8">
-              Pick at least 2 candidates to compare.
-            </h2>
-            <p className="text-muted-sm max-w-480 mx-auto mb-24">
-              Select 2 or 3 evaluated candidates with verified skill passports from the role leaderboard.
-            </p>
-            <Link to={`/recruiter/role/${roleId}`} className="b sm">
-              Back to leaderboard
-            </Link>
+
+            {/* In-page candidate selection cards */}
+            {allApplicantsWithPassport.length > 0 && (
+              <div className="compare-picker-grid">
+                {allApplicantsWithPassport.map((cand) => {
+                  const isSelected = selectedApplicants.some((s) => s.id === cand.id)
+                  return (
+                    <div
+                      key={cand.id}
+                      className={`compare-picker-card ${isSelected ? 'selected' : ''}`}
+                    >
+                      <div className="compare-picker-info">
+                        <div className="compare-picker-name">
+                          <strong>{hideNames ? `Candidate #${cand.id.slice(-4)}` : cand.name}</strong>
+                          {cand.isLiveDemo && <span className="lb-tag ml-6">Live</span>}
+                          {cand.isRecruiterGenerated && <span className="lb-tag ml-6">Generated</span>}
+                        </div>
+                        <div className="compare-picker-sub">
+                          {cand.passport?.id || 'Passport attached'}
+                        </div>
+                      </div>
+                      <button
+                        type="button"
+                        className={`b sm ${isSelected ? 'g' : 'primary'}`}
+                        onClick={() =>
+                          isSelected
+                            ? handleRemoveCandidate(cand.id)
+                            : handleAddCandidate(cand.id)
+                        }
+                      >
+                        {isSelected ? '✓ Selected' : '+ Compare'}
+                      </button>
+                    </div>
+                  )
+                })}
+              </div>
+            )}
+
+            <div className="text-center mt-20">
+              <Link to={`/recruiter/role/${roleId}`} className="b sm g">
+                ← Back to leaderboard
+              </Link>
+            </div>
           </div>
         </div>
       </main>
