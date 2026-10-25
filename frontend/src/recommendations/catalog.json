@@ -1,0 +1,207 @@
+{
+  "React": [
+    {
+      "title": "React Official Documentation & Quick Start",
+      "provider": "React Team",
+      "url": "https://react.dev",
+      "type": "docs",
+      "cost": "free"
+    }
+  ],
+  "TypeScript": [
+    {
+      "title": "TypeScript Handbook & Official Documentation",
+      "provider": "Microsoft",
+      "url": "https://www.typescriptlang.org/docs/",
+      "type": "docs",
+      "cost": "free"
+    },
+    {
+      "title": "TypeScript Interactive Playground",
+      "provider": "Microsoft",
+      "url": "https://www.typescriptlang.org/play",
+      "type": "practice",
+      "cost": "free"
+    }
+  ],
+  "JavaScript": [
+    {
+      "title": "MDN Web Docs: JavaScript Reference & Guide",
+      "provider": "Mozilla",
+      "url": "https://developer.mozilla.org/en-US/docs/Web/JavaScript",
+      "type": "docs",
+      "cost": "free"
+    }
+  ],
+  "REST APIs": [
+    {
+      "title": "MDN Web Docs: Server-Side Web APIs Architecture",
+      "provider": "Mozilla",
+      "url": "https://developer.mozilla.org/en-US/docs/Learn/Server-side",
+      "type": "docs",
+      "cost": "free"
+    }
+  ],
+  "Testing": [
+    {
+      "title": "Vitest Automated Testing Guide & API Reference",
+      "provider": "Vitest Team",
+      "url": "https://vitest.dev/guide/",
+      "type": "docs",
+      "cost": "free"
+    }
+  ],
+  "Docker": [
+    {
+      "title": "Docker Official Documentation & Guides",
+      "provider": "Docker Inc.",
+      "url": "https://docs.docker.com/",
+      "type": "docs",
+      "cost": "free"
+    }
+  ],
+  "PostgreSQL": [
+    {
+      "title": "PostgreSQL Official Documentation",
+      "provider": "PostgreSQL Global Development Group",
+      "url": "https://www.postgresql.org/docs/",
+      "type": "docs",
+      "cost": "free"
+    }
+  ],
+  "Git workflow": [
+    {
+      "title": "Pro Git Book & Official Reference Manual",
+      "provider": "Git Core Team",
+      "url": "https://git-scm.com/doc",
+      "type": "docs",
+      "cost": "free"
+    }
+  ],
+  "Python": [
+    {
+      "title": "Python 3 Official Documentation & Tutorial",
+      "provider": "Python Software Foundation",
+      "url": "https://docs.python.org/3/",
+      "type": "docs",
+      "cost": "free"
+    }
+  ],
+  "AWS": [
+    {
+      "title": "AWS Cloud Architecture & Compute Documentation",
+      "provider": "Amazon Web Services",
+      "url": "https://docs.aws.amazon.com/",
+      "type": "docs",
+      "cost": "free"
+    }
+  ],
+  "System design": [
+    {
+      "title": "The System Design Primer",
+      "provider": "Donne Martin",
+      "url": "https://github.com/donnemartin/system-design-primer",
+      "type": "docs",
+      "cost": "free"
+    }
+  ],
+  "Kubernetes": [
+    {
+      "title": "Kubernetes Official Documentation & Tutorials",
+      "provider": "Cloud Native Computing Foundation",
+      "url": "https://kubernetes.io/docs/",
+      "type": "docs",
+      "cost": "free"
+    }
+  ],
+  "Django": [
+    {
+      "title": "Django Web Framework Documentation",
+      "provider": "Django Software Foundation",
+      "url": "https://docs.djangoproject.com/",
+      "type": "docs",
+      "cost": "free"
+    }
+  ],
+  "SQL": [
+    {
+      "title": "PostgreSQL SQL Language Reference & Syntax",
+      "provider": "PostgreSQL Global Development Group",
+      "url": "https://www.postgresql.org/docs/",
+      "type": "docs",
+      "cost": "free"
+    }
+  ],
+  "C++": [
+    {
+      "title": "C++ Standard Library & Language Reference",
+      "provider": "cppreference.com",
+      "url": "https://en.cppreference.com/w/",
+      "type": "docs",
+      "cost": "free"
+    }
+  ],
+  "C": [
+    {
+      "title": "C Language Standard Reference",
+      "provider": "cppreference.com",
+      "url": "https://en.cppreference.com/w/c",
+      "type": "docs",
+      "cost": "free"
+    }
+  ],
+  "Linux": [
+    {
+      "title": "Linux Kernel Documentation",
+      "provider": "The Linux Kernel Organization",
+      "url": "https://www.kernel.org/doc/html/latest/",
+      "type": "docs",
+      "cost": "free"
+    }
+  ],
+  "FastAPI": [
+    {
+      "title": "FastAPI Framework Documentation",
+      "provider": "Tiangolo",
+      "url": "https://fastapi.tiangolo.com/",
+      "type": "docs",
+      "cost": "free"
+    }
+  ],
+  "Flask": [
+    {
+      "title": "Flask Web Development Documentation",
+      "provider": "Pallets Projects",
+      "url": "https://flask.palletsprojects.com/",
+      "type": "docs",
+      "cost": "free"
+    }
+  ],
+  "Node.js": [
+    {
+      "title": "Node.js Runtime API Documentation",
+      "provider": "OpenJS Foundation",
+      "url": "https://nodejs.org/docs/latest/api/",
+      "type": "docs",
+      "cost": "free"
+    }
+  ],
+  "GraphQL": [
+    {
+      "title": "GraphQL Official Documentation & Schema Guide",
+      "provider": "GraphQL Foundation",
+      "url": "https://graphql.org/learn/",
+      "type": "docs",
+      "cost": "free"
+    }
+  ],
+  "Redis": [
+    {
+      "title": "Redis Official Documentation & Commands",
+      "provider": "Redis Ltd.",
+      "url": "https://redis.io/docs/latest/",
+      "type": "docs",
+      "cost": "free"
+    }
+  ]
+}

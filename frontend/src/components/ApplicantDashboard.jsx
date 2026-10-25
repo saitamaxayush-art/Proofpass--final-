@@ -4,7 +4,7 @@
  * share links, tamper verification, best-matching roles, and iMocha gap closing.
  */
 
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { useAuth } from '../auth/AuthContext.jsx'
 import { listPassports, setPassportRevoked, savePassport } from '../api/passports.js'
@@ -12,6 +12,7 @@ import { getRecommendedRoles } from '../api/recommendations.js'
 import { getLatestRoleKey, listRoadmaps } from '../api/roadmaps.js'
 import { imochaLink } from '../data/resources.js'
 import { L, WEIGHTS } from '../data.js'
+import { generateRecommendations } from '../recommendations/index.js'
 
 export default function ApplicantDashboard() {
   const { user } = useAuth()
@@ -27,6 +28,16 @@ export default function ApplicantDashboard() {
   const [selfSubmittedLinks, setSelfSubmittedLinks] = useState({})
   const [copiedLink, setCopiedLink] = useState(false)
   const [notice, setNotice] = useState(null)
+  const [showAllLearnings, setShowAllLearnings] = useState(false)
+  const [showAllRecommendations, setShowAllRecommendations] = useState(false)
+
+  // Compute deterministic recommendations and learnings from passport and target role
+  const recData = useMemo(() => {
+    if (!passport) return null
+    return generateRecommendations(passport, {
+      targetRole: latestRole?.roleName || passport.targetRole || user?.profile?.targetRole,
+    })
+  }, [passport, latestRole, user?.profile?.targetRole])
 
   // Fetch candidate passport and best-matching roles
   useEffect(() => {
@@ -367,106 +378,111 @@ export default function ApplicantDashboard() {
           </div>
         </div>
 
-        {/* Learning Roadmaps Card */}
+        {/* Learnings Section */}
         <div className="table-card glass" style={{ padding: '24px', marginBottom: '28px' }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: '16px', marginBottom: '16px' }}>
             <div>
               <div className="k m" style={{ color: 'var(--accent)', marginBottom: '4px' }}>
-                {latestRole?.roleName ? `TARGET ROLE: ${latestRole.roleName.toUpperCase()}` : 'SKILL GAP ROADMAPS'}
+                {recData?.targetRole ? `TARGET ROLE: ${recData.targetRole.toUpperCase()}` : 'SKILL GAP ROADMAPS'}
               </div>
               <h2 style={{ fontSize: '1.2rem', fontWeight: 600, color: 'var(--ink)', margin: 0 }}>
-                Learning Roadmaps
+                Learnings
               </h2>
               <p style={{ fontSize: '0.85rem', color: 'var(--muted)', margin: '4px 0 0' }}>
-                {latestRole?.roleName
-                  ? `Curated courses and assessments for required skills not yet Verified for ${latestRole.roleName}.`
-                  : 'Targeted course modules and verification assessments for skills your target role needs.'}
+                {recData?.targetRole
+                  ? `Curated courses, official documentation, and project plans for skills required by ${recData.targetRole} that are absent from your passport.`
+                  : 'Targeted course modules and project blueprints for skills your target role requires.'}
               </p>
             </div>
 
-            <Link to="/learnings" className="b sm">
+            <Link to="/learnings" className="b sm" style={{ minHeight: '44px' }}>
               View all roadmaps <span className="btn-arrow" aria-hidden="true">-&gt;</span>
             </Link>
           </div>
 
-          {roleRoadmaps.length === 0 ? (
-            <div style={{ padding: '12px 0', color: 'var(--muted)', fontSize: '0.88rem' }}>
-              {latestRole
-                ? 'Every skill your target role needs is Verified. No roadmap needed.'
-                : 'No roadmaps yet. Run verification to build a plan for your target role.'}
+          {!recData || recData.learnings.length === 0 ? (
+            <div style={{ padding: '16px 0', color: 'var(--muted)', fontSize: '0.88rem' }}>
+              All required skills for your target role are present in your passport. No foundational learning roadmaps needed.
             </div>
           ) : (
             <div>
-              {/* Counts summary */}
               <div style={{ display: 'flex', gap: '20px', flexWrap: 'wrap', marginBottom: '16px' }}>
                 <div style={{ fontSize: '0.85rem' }}>
-                  <span style={{ color: 'var(--muted)' }}>Active Roadmaps: </span>
-                  <strong>{roleRoadmaps.filter((r) => r.status !== 'completed').length}</strong>
-                </div>
-                <div style={{ fontSize: '0.85rem' }}>
-                  <span style={{ color: 'var(--muted)' }}>Completed: </span>
-                  <strong style={{ color: 'var(--st-v)' }}>{roleRoadmaps.filter((r) => r.status === 'completed').length}</strong>
-                </div>
-                <div style={{ fontSize: '0.85rem' }}>
-                  <span style={{ color: 'var(--muted)' }}>Steps Progress: </span>
-                  <strong>
-                    {roleRoadmaps.reduce((acc, r) => acc + (r.steps?.filter((s) => s.done).length || 0), 0)} of{' '}
-                    {roleRoadmaps.reduce((acc, r) => acc + (r.steps?.length || 0), 0)} done
-                  </strong>
+                  <span style={{ color: 'var(--muted)' }}>Absent Role Skills: </span>
+                  <strong>{recData.learnings.length}</strong>
                 </div>
               </div>
 
-              {/* Next 3 recommended steps */}
-              {nextSteps.length > 0 ? (
-                <div>
-                  <span className="k m" style={{ fontSize: '0.72rem', display: 'block', marginBottom: '8px', opacity: 0.75 }}>
-                    NEXT 3 RECOMMENDED STEPS
-                  </span>
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-                    {nextSteps.map((step) => (
-                      <div
-                        key={step.id}
-                        style={{
-                          display: 'flex',
-                          alignItems: 'center',
-                          justifyContent: 'space-between',
-                          padding: '10px 14px',
-                          borderRadius: '8px',
-                          background: 'var(--surface)',
-                          border: '1px solid var(--line)',
-                          gap: '12px',
-                          flexWrap: 'wrap',
-                        }}
-                      >
-                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
-                          <span className="chip sm" style={{ fontSize: '0.7rem' }}>
-                            {step.skillName}
-                          </span>
-                          <span style={{ fontSize: '0.88rem', fontWeight: 500, color: 'var(--ink)' }}>
-                            {step.title}
-                          </span>
-                          <span className="m" style={{ fontSize: '0.75rem', color: 'var(--faint)' }}>
-                            ({step.platform})
-                          </span>
-                        </div>
-                        {step.url && (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+                {(showAllLearnings ? recData.learnings : recData.learnings.slice(0, 5)).map((item) => (
+                  <div
+                    key={item.id}
+                    style={{
+                      display: 'flex',
+                      flexDirection: 'column',
+                      padding: '16px',
+                      borderRadius: '8px',
+                      background: 'var(--surface)',
+                      border: '1px solid var(--line)',
+                      gap: '10px',
+                    }}
+                  >
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '8px' }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
+                        <span className="chip sm U">Absent</span>
+                        <strong style={{ fontSize: '0.98rem', color: 'var(--ink)' }}>{item.skill}</strong>
+                        <span className="chip sm">Effort: {item.effort}</span>
+                        {item.estimatedMatchChange && (
+                          <span className="chip sm V">{item.estimatedMatchChange} match</span>
+                        )}
+                      </div>
+                      <div>
+                        {item.target && item.target !== '#' && (
                           <a
-                            href={step.url}
+                            href={item.target}
                             target="_blank"
                             rel="noopener noreferrer"
-                            className="b g sm"
-                            style={{ fontSize: '0.75rem', padding: '4px 10px', textDecoration: 'none' }}
+                            className="b sm g"
+                            style={{ minHeight: '44px', textDecoration: 'none' }}
                           >
-                            Open ↗
+                            {item.actionLabel}
                           </a>
                         )}
                       </div>
-                    ))}
+                    </div>
+
+                    <p style={{ fontSize: '0.84rem', color: 'var(--muted)', margin: 0, lineHeight: 1.45 }}>
+                      {item.why}
+                    </p>
+
+                    {item.projectIdea && (
+                      <div
+                        style={{
+                          fontSize: '0.8rem',
+                          color: 'var(--ink)',
+                          background: 'var(--surface-2)',
+                          border: '1px solid var(--line)',
+                          borderRadius: '6px',
+                          padding: '8px 12px',
+                        }}
+                      >
+                        <strong>Project Blueprint:</strong> {item.projectIdea}
+                      </div>
+                    )}
                   </div>
-                </div>
-              ) : (
-                <div style={{ fontSize: '0.85rem', color: 'var(--st-v)' }}>
-                  ✓ All current steps completed! You are ready to re-verify your passport.
+                ))}
+              </div>
+
+              {recData.learnings.length > 5 && (
+                <div style={{ marginTop: '16px', textAlign: 'center' }}>
+                  <button
+                    type="button"
+                    className="b sm g"
+                    style={{ minHeight: '44px' }}
+                    onClick={() => setShowAllLearnings(!showAllLearnings)}
+                  >
+                    {showAllLearnings ? 'Show fewer learnings' : `Show more (${recData.learnings.length - 5})`}
+                  </button>
                 </div>
               )}
             </div>
@@ -620,76 +636,168 @@ export default function ApplicantDashboard() {
           </div>
         </section>
 
-        {/* Verify the Rest (Close Gaps with iMocha) */}
-        {skillsToVerifyRest.length > 0 && (
-          <section style={{ marginBottom: '40px' }}>
-            <div style={{ marginBottom: '16px' }}>
-              <span className="k m" style={{ color: 'var(--accent)' }}>CLOSE EVIDENCE GAPS</span>
-              <h2 style={{ fontSize: '1.25rem', fontWeight: 600, color: 'var(--ink)', margin: '4px 0 0' }}>
-                Verify the Rest
-              </h2>
-              <p style={{ fontSize: '0.85rem', color: 'var(--muted)', margin: '4px 0 0' }}>
-                These skills currently have no code proof (Claimed) or have repository conflicts (Contradicted). Take a skill assessment on iMocha to earn Supported status.
-              </p>
-            </div>
+        {/* Recommendations (Add Evidence & Fix Conflicts) */}
+        <section style={{ marginBottom: '40px' }}>
+          <div style={{ marginBottom: '16px' }}>
+            <span className="k m" style={{ color: 'var(--accent)' }}>CLOSE EVIDENCE GAPS</span>
+            <h2 style={{ fontSize: '1.25rem', fontWeight: 600, color: 'var(--ink)', margin: '4px 0 0' }}>
+              Recommendations
+            </h2>
+            <p style={{ fontSize: '0.85rem', color: 'var(--muted)', margin: '4px 0 0' }}>
+              Deterministic steps to provide verifiable code evidence, complete micro-checks, and resolve repository conflicts.
+            </p>
+          </div>
 
-            <div className="verify-rest-grid">
-              {skillsToVerifyRest.map((item) => (
-                <div key={item.skill} className="verify-rest-card">
-                  <div>
-                    <div className="verify-rest-head">
-                      <strong>{item.skill}</strong>
-                      <span className={`chip ${item.state}`}>{L[item.state]}</span>
+          {/* Quiet Strengths Line */}
+          {recData?.strengths?.length > 0 && (
+            <div
+              style={{
+                marginBottom: '16px',
+                padding: '12px 16px',
+                borderRadius: '8px',
+                background: 'var(--surface)',
+                border: '1px solid var(--line-soft)',
+                fontSize: '0.85rem',
+                color: 'var(--muted)',
+                lineHeight: 1.5,
+              }}
+            >
+              <strong style={{ color: 'var(--st-v)' }}>Strengths:</strong>{' '}
+              <span style={{ color: 'var(--ink)' }}>{recData.strengths.join(', ')}</span>{' '}
+              verified against ground-truth evidence.
+            </div>
+          )}
+
+          {!recData || recData.recommendations.length === 0 ? (
+            <div style={{ padding: '16px 0', color: 'var(--muted)', fontSize: '0.88rem' }}>
+              No evidence gaps or conflicts remaining. Every audited skill has reached Verified status.
+            </div>
+          ) : (
+            <div>
+              <div style={{ display: 'flex', gap: '20px', flexWrap: 'wrap', marginBottom: '16px' }}>
+                <div style={{ fontSize: '0.85rem' }}>
+                  <span style={{ color: 'var(--muted)' }}>Actionable Items: </span>
+                  <strong>{recData.recommendations.length}</strong>
+                </div>
+              </div>
+
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+                {(showAllRecommendations
+                  ? recData.recommendations
+                  : recData.recommendations.slice(0, 5)
+                ).map((item) => (
+                  <div
+                    key={item.id}
+                    style={{
+                      display: 'flex',
+                      flexDirection: 'column',
+                      padding: '16px',
+                      borderRadius: '8px',
+                      background: 'var(--surface)',
+                      border: '1px solid var(--line)',
+                      gap: '10px',
+                    }}
+                  >
+                    <div
+                      style={{
+                        display: 'flex',
+                        justifyContent: 'space-between',
+                        alignItems: 'center',
+                        flexWrap: 'wrap',
+                        gap: '8px',
+                      }}
+                    >
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
+                        <span className={`chip sm ${item.state}`}>
+                          {L[item.state] || item.state}
+                        </span>
+                        <strong style={{ fontSize: '0.98rem', color: 'var(--ink)' }}>{item.skill}</strong>
+                        <span className="chip sm">Effort: {item.effort}</span>
+                        {item.estimatedMatchChange && (
+                          <span className="chip sm V">{item.estimatedMatchChange} match</span>
+                        )}
+                      </div>
+                      <div>
+                        {item.target && item.target.startsWith('http') ? (
+                          <a
+                            href={item.target}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="b sm g"
+                            style={{
+                              minHeight: '44px',
+                              display: 'inline-flex',
+                              alignItems: 'center',
+                              justifyContent: 'center',
+                              textDecoration: 'none',
+                            }}
+                          >
+                            {item.actionLabel || 'Take action'} ↗
+                          </a>
+                        ) : (
+                          <Link
+                            to={item.target || '/verify'}
+                            className="b sm g"
+                            style={{
+                              minHeight: '44px',
+                              display: 'inline-flex',
+                              alignItems: 'center',
+                              justifyContent: 'center',
+                              textDecoration: 'none',
+                            }}
+                          >
+                            {item.actionLabel || 'Take action'} <span className="btn-arrow" aria-hidden="true">-&gt;</span>
+                          </Link>
+                        )}
+                      </div>
                     </div>
-                    <p style={{ fontSize: '0.82rem', color: 'var(--muted)', margin: '6px 0 12px', lineHeight: '1.4' }}>
-                      {item.rationale}
+
+                    <p style={{ fontSize: '0.84rem', color: 'var(--muted)', margin: 0, lineHeight: 1.45 }}>
+                      {item.why}
                     </p>
 
-                    <a
-                      href={imochaLink(item.skill)}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="b sm g"
-                      style={{ width: '100%', textAlign: 'center', display: 'block', marginBottom: '10px' }}
-                    >
-                      Take assessment on iMocha ↗
-                    </a>
+                    {item.type === 'fix' && (
+                      <div
+                        style={{
+                          fontSize: '0.8rem',
+                          color: 'var(--ink)',
+                          background: 'var(--surface-2)',
+                          border: '1px solid var(--line)',
+                          borderRadius: '6px',
+                          padding: '8px 12px',
+                        }}
+                      >
+                        {item.conflictText && (
+                          <div style={{ color: 'var(--st-x)', fontWeight: 600, marginBottom: '4px' }}>
+                            Conflict: {item.conflictText}
+                          </div>
+                        )}
+                        <div>
+                          <strong>Resolution:</strong> {item.resolutionGuide}
+                        </div>
+                      </div>
+                    )}
                   </div>
+                ))}
+              </div>
 
-                  <div className="self-submit-form">
-                    <label htmlFor={`imocha-${item.skill}`} className="form-label" style={{ fontSize: '0.74rem' }}>
-                      Paste verified result link
-                    </label>
-                    <input
-                      id={`imocha-${item.skill}`}
-                      type="url"
-                      className="form-input sm self-submit-input"
-                      placeholder="https://app.imocha.io/test/result/..."
-                      value={selfSubmittedLinks[item.skill] || ''}
-                      onChange={(e) =>
-                        setSelfSubmittedLinks((prev) => ({
-                          ...prev,
-                          [item.skill]: e.target.value,
-                        }))
-                      }
-                    />
-                    <button
-                      type="button"
-                      className="b sm"
-                      onClick={() => handleSelfSubmitLink(item.skill)}
-                      disabled={!selfSubmittedLinks[item.skill]?.trim()}
-                    >
-                      Submit for audit
-                    </button>
-                    <span className="self-submit-note">
-                      Stored as candidate-submitted evidence, marked "not yet checked", elevates to Supported at most.
-                    </span>
-                  </div>
+              {recData.recommendations.length > 5 && (
+                <div style={{ marginTop: '16px', textAlign: 'center' }}>
+                  <button
+                    type="button"
+                    className="b sm g"
+                    style={{ minHeight: '44px' }}
+                    onClick={() => setShowAllRecommendations(!showAllRecommendations)}
+                  >
+                    {showAllRecommendations
+                      ? 'Show fewer recommendations'
+                      : `Show more (${recData.recommendations.length - 5})`}
+                  </button>
                 </div>
-              ))}
+              )}
             </div>
-          </section>
-        )}
+          )}
+        </section>
       </div>
     </main>
   )
