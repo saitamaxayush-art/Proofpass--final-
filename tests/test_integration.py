@@ -1,19 +1,22 @@
 """
 End-to-end integration test using fixtures.
 """
-import os
-os.environ["INTELLIGENCE_LLM_API_KEY"] = ""
-os.environ["INTELLIGENCE_FALLBACK_TO_MOCK"] = "true"
-
-from intelligence.state_engine import assess_all
-from intelligence.quiz_engine import generate_micro_quiz, evaluate_answer
-from intelligence.role_matcher import match_role, compute_gaps
-from intelligence.passport_builder import build_passport
-from intelligence.models import QuizAnswer
-from intelligence.fixtures import (
+import pytest
+from backend.intelligence.state_engine import assess_all
+from backend.intelligence.quiz_engine import generate_micro_quiz, evaluate_answer
+from backend.intelligence.role_matcher import match_role, compute_gaps
+from backend.intelligence.passport_builder import build_passport
+from backend.intelligence.models import QuizAnswer
+from backend.intelligence.fixtures import (
     MOCK_CLAIMS, MOCK_VERIFICATION_STRONG, MOCK_TARGET_ROLE,
     MOCK_CODE_SNIPPETS, MOCK_COMMIT_MESSAGES,
 )
+
+
+@pytest.fixture(autouse=True)
+def setup_mock_env(monkeypatch):
+    monkeypatch.setenv("INTELLIGENCE_LLM_API_KEY", "")
+    monkeypatch.setenv("INTELLIGENCE_FALLBACK_TO_MOCK", "true")
 
 
 def test_full_pipeline():

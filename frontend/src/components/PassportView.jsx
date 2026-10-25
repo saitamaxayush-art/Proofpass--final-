@@ -5,17 +5,73 @@
  */
 
 import { useEffect, useState } from 'react'
-import { useParams, Link } from 'react-router-dom'
+import { useParams, useLocation, Link } from 'react-router-dom'
 import { getPassport, checkPassportTamper } from '../api/passports.js'
 import { L, WEIGHTS } from '../data.js'
+import { RM } from '../lib.js'
+import { EvidenceCard } from './EvidenceCard.jsx'
+import { getSkillConfidence } from '../lib/confidence.js'
+import { getSkillId } from '../lib/skillsByState.js'
 
 export default function PassportView() {
   const { passportId } = useParams()
+  const location = useLocation()
   const [passport, setPassport] = useState(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
   const [tamperResult, setTamperResult] = useState(null)
   const [isCheckingTamper, setIsCheckingTamper] = useState(false)
+  const [expandedSkills, setExpandedSkills] = useState({})
+
+  const toggleSkillEvidence = (skillName) => {
+    setExpandedSkills((prev) => ({ ...prev, [skillName]: !prev[skillName] }))
+  }
+
+  // On load or hash change: scroll to skill row, expand its audit trace, and highlight briefly
+  useEffect(() => {
+    if (!passport || loading) return
+
+    const handleAnchor = () => {
+      const hash = window.location.hash || location.hash
+      if (!hash) return
+      const targetId = hash.replace(/^#/, '')
+      const targetEl = document.getElementById(targetId)
+
+      if (targetEl) {
+        // Find matching skill to expand audit trace
+        const matchedSkill = (passport.skills || []).find(
+          (s) => `skill-${getSkillId(s)}` === targetId
+        )
+        if (matchedSkill) {
+          setExpandedSkills((prev) => ({ ...prev, [matchedSkill.skill]: true }))
+        }
+
+        // Scroll into view
+        targetEl.scrollIntoView({
+          behavior: RM ? 'auto' : 'smooth',
+          block: 'center',
+        })
+
+        // Highlight briefly using CSS class
+        targetEl.classList.remove('skill-row-highlight')
+        void targetEl.offsetWidth
+        targetEl.classList.add('skill-row-highlight')
+
+        const timer = setTimeout(() => {
+          targetEl.classList.remove('skill-row-highlight')
+        }, 2500)
+        return () => clearTimeout(timer)
+      }
+    }
+
+    const frameId = requestAnimationFrame(handleAnchor)
+    window.addEventListener('hashchange', handleAnchor)
+
+    return () => {
+      cancelAnimationFrame(frameId)
+      window.removeEventListener('hashchange', handleAnchor)
+    }
+  }, [passport, loading, location.hash])
 
   useEffect(() => {
     let mounted = true
@@ -69,12 +125,12 @@ export default function PassportView() {
     return (
       <main id="main" className="dash-page">
         <div className="w">
-          <div className="table-card glass" style={{ padding: '40px', textAlign: 'center' }}>
-            <span className="k m" style={{ color: 'var(--st-x)' }}>RECORD NOT FOUND</span>
-            <h1 style={{ fontSize: '1.4rem', color: 'var(--ink)', margin: '12px 0 8px' }}>
+          <div className="table-card glass card-pad-36 text-center">
+            <span className="k m text-st-x">RECORD NOT FOUND</span>
+            <h1 className="section-title-sm mt-12 mb-8">
               Skill Passport Unavailable
             </h1>
-            <p style={{ color: 'var(--muted)', maxWidth: '480px', margin: '0 auto 20px', fontSize: '0.9rem' }}>
+            <p className="text-muted-sm max-w-480 mx-auto mb-20">
               The requested passport ID "{passportId}" does not exist in this browser storage or has been permanently removed.
             </p>
             <Link to="/" className="b sm">
@@ -110,42 +166,47 @@ export default function PassportView() {
         )}
 
         {/* Passport Header Card */}
-        <div className="table-card glass" style={{ padding: '28px' }}>
+        <div className="table-card glass card-pad-24">
           <div className="passport-seal-header">
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: '14px' }}>
+            <div className="table-head-row-between gap-14 flex-wrap">
               <div>
-                <span className="k m" style={{ color: 'var(--accent)' }}>
+                <span className="k m text-accent">
                   VERIFIED CREDIBILITY RECORD
                 </span>
-                <h1 style={{ fontSize: '1.8rem', fontWeight: 700, color: 'var(--ink)', margin: '6px 0 2px' }}>
+                <h1 className="dash-title mt-4 mb-2">
                   {passport.candidate}
                 </h1>
-                <p style={{ color: 'var(--muted)', fontSize: '0.92rem', margin: 0 }}>
-                  Target Role: <strong>{passport.targetRole}</strong> · Issued:{' '}
-                  {new Date(passport.issuedAt).toLocaleDateString(undefined, {
-                    year: 'numeric',
-                    month: 'long',
-                    day: 'numeric',
-                  })}
-                </p>
+                <div className="passport-clean-meta">
+                  <span>
+                    Target Role: <strong>{passport.targetRole}</strong> · Issued:{' '}
+                    {new Date(passport.issuedAt).toLocaleDateString(undefined, {
+                      year: 'numeric',
+                      month: 'long',
+                      day: 'numeric',
+                    })}
+                  </span>
+                </div>
               </div>
 
-              <div style={{ textAlign: 'right' }}>
-                <span style={{ fontFamily: 'var(--mono)', fontSize: '0.82rem', color: 'var(--faint)', display: 'block' }}>
+              <div className="text-right">
+                <span className="passport-id-label">
                   PASSPORT ID
                 </span>
-                <span style={{ fontFamily: 'var(--mono)', fontSize: '1.05rem', fontWeight: 700, color: 'var(--ink)' }}>
+                <span className="passport-id-value">
                   {passport.id}
                 </span>
               </div>
             </div>
 
             {/* Cryptographic Hash & Tamper Button */}
-            <div style={{ marginTop: '18px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '12px' }}>
-              <div style={{ flex: '1 1 300px' }}>
-                <span className="seal-hash-display" title={passport.hash}>
+            <div className="table-head-row-between gap-12 mt-16 flex-wrap">
+              <div className="flex-1-min-300">
+                <span className="passport-hash-mono" title={passport.hash}>
                   SHA-256: {passport.hash}
                 </span>
+                <p className="text-faint-xs">
+                  Excerpts and confidence are display details. The seal covers skill, state and evidence text.
+                </p>
               </div>
 
               <button
@@ -161,16 +222,7 @@ export default function PassportView() {
             {/* Tamper Check Result Toast */}
             {tamperResult && (
               <div
-                style={{
-                  marginTop: '12px',
-                  padding: '10px 14px',
-                  borderRadius: '8px',
-                  background: tamperResult.valid ? 'rgba(42, 117, 80, 0.1)' : 'rgba(179, 38, 30, 0.1)',
-                  border: `1px solid ${tamperResult.valid ? 'var(--st-v)' : 'var(--st-x)'}`,
-                  color: tamperResult.valid ? 'var(--st-v)' : 'var(--st-x)',
-                  fontSize: '0.85rem',
-                  fontFamily: 'var(--mono)',
-                }}
+                className={tamperResult.valid ? 'notice-tamper-valid' : 'notice-tamper-invalid'}
                 role="status"
               >
                 {tamperResult.valid ? '✓ ' : '✗ '}
@@ -179,23 +231,20 @@ export default function PassportView() {
             )}
           </div>
 
-          {/* Role Match Explanation */}
-          <div style={{ marginBottom: '24px' }}>
-            <span className="k m">EVIDENCE-WEIGHTED STATE MIX</span>
-            <p style={{ fontSize: '0.85rem', color: 'var(--muted)', margin: '4px 0 10px' }}>
-              Candidate claims audited against source code, commits, and credentials. Verified: {counts.V} · Supported: {counts.S} · Claimed: {counts.C} · Contradicted: {counts.X}.
-            </p>
-            <div className="state-mix-bar">
-              <div className="mix-v" style={{ width: `${(counts.V / Math.max(1, counts.total)) * 100}%` }} title={`Verified: ${counts.V}`} />
-              <div className="mix-s" style={{ width: `${(counts.S / Math.max(1, counts.total)) * 100}%` }} title={`Supported: ${counts.S}`} />
-              <div className="mix-c" style={{ width: `${(counts.C / Math.max(1, counts.total)) * 100}%` }} title={`Claimed: ${counts.C}`} />
-              <div className="mix-x" style={{ width: `${(counts.X / Math.max(1, counts.total)) * 100}%` }} title={`Contradicted: ${counts.X}`} />
-            </div>
+          {/* Short plain text skills overview */}
+          <div className="passport-skills-plain-summary" aria-label="Skills state overview">
+            <span><strong>Verified:</strong> {counts.V}</span>
+            <span aria-hidden="true">·</span>
+            <span><strong>Supported:</strong> {counts.S}</span>
+            <span aria-hidden="true">·</span>
+            <span><strong>Claimed:</strong> {counts.C}</span>
+            <span aria-hidden="true">·</span>
+            <span><strong>Contradicted:</strong> {counts.X}</span>
           </div>
 
           {/* Skill Proof List */}
           <div>
-            <h2 style={{ fontSize: '1.15rem', fontWeight: 600, color: 'var(--ink)', marginBottom: '14px' }}>
+            <h2 className="section-title-sm mb-14">
               Skill Verification Ledger
             </h2>
 
@@ -205,42 +254,84 @@ export default function PassportView() {
                   <tr>
                     <th>Skill</th>
                     <th>State</th>
+                    <th>Confidence</th>
                     <th>Level</th>
                     <th>Audit Evidence & Commits</th>
                   </tr>
                 </thead>
                 <tbody>
-                  {skills.map((s) => (
-                    <tr key={s.skill}>
-                      <td data-label="Skill">
-                        <strong>{s.skill}</strong>
-                      </td>
-                      <td data-label="State">
-                        <span className={`chip ${s.state}`}>{L[s.state]}</span>
-                      </td>
-                      <td data-label="Level">
-                        <span style={{ fontFamily: 'var(--mono)', fontSize: '0.8rem', color: 'var(--muted)' }}>
-                          Level {s.level || 2}
-                        </span>
-                      </td>
-                      <td data-label="Evidence">
-                        <div style={{ fontSize: '0.82rem', color: 'var(--ink)' }}>
-                          {s.evidence}
-                        </div>
-                        {s.rationale && (
-                          <div style={{ fontSize: '0.76rem', color: 'var(--muted)', marginTop: '4px' }}>
-                            {s.rationale}
+                  {skills.map((s) => {
+                    const skillId = getSkillId(s)
+                    const hasAnyEvidenceDetails = skills.some(
+                      (item) => Array.isArray(item.evidenceDetails)
+                    )
+                    const confInfo = getSkillConfidence(s, hasAnyEvidenceDetails)
+
+                    return (
+                      <tr key={s.skill} id={`skill-${skillId}`}>
+                        <td data-label="Skill">
+                          <strong>{s.skill}</strong>
+                        </td>
+                        <td data-label="State">
+                          <span className={`chip ${s.state}`}>{L[s.state]}</span>
+                        </td>
+                        <td data-label="Confidence">
+                          {confInfo ? (
+                            <span
+                              className={`conf-badge ${confInfo.label ? confInfo.label.toLowerCase() : 'none'}`}
+                              title={confInfo.text}
+                            >
+                              {confInfo.text}
+                            </span>
+                          ) : (
+                            <span className="text-muted">—</span>
+                          )}
+                        </td>
+                        <td data-label="Level">
+                          <span className="level-badge">
+                            Level {s.level || 2}
+                          </span>
+                        </td>
+                        <td data-label="Evidence">
+                          <div className="evidence-summary-text">
+                            {s.evidence}
                           </div>
-                        )}
-                      </td>
-                    </tr>
-                  ))}
+                          {s.rationale && (
+                            <div className="evidence-rationale-text">
+                              {s.rationale}
+                            </div>
+                          )}
+                          {Array.isArray(s.evidenceDetails) && s.evidenceDetails.length > 0 && (
+                            <div className="evidence-actions-box">
+                              <button
+                                type="button"
+                                className="evidence-expand-btn"
+                                onClick={() => toggleSkillEvidence(s.skill)}
+                                aria-expanded={Boolean(expandedSkills[s.skill])}
+                              >
+                                {expandedSkills[s.skill]
+                                  ? 'Hide audit trace'
+                                  : `Inspect audit trace (${s.evidenceDetails.length})`}
+                              </button>
+                              {expandedSkills[s.skill] && (
+                                <div className="evidence-actions-box">
+                                  {s.evidenceDetails.map((detail, idx) => (
+                                    <EvidenceCard key={idx} detail={detail} />
+                                  ))}
+                                </div>
+                              )}
+                            </div>
+                          )}
+                        </td>
+                      </tr>
+                    )
+                  })}
                 </tbody>
               </table>
             </div>
           </div>
 
-          <div style={{ marginTop: '28px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '12px' }}>
+          <div className="table-head-row-between gap-12 mt-24 flex-wrap">
             <Link to="/" className="b sm g">
               ← ProofPass Home
             </Link>

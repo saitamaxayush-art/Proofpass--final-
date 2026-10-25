@@ -15,7 +15,7 @@ import zipfile
 import pytest
 from fastapi.testclient import TestClient
 
-from backend.server import app
+from backend.main import app
 from backend.api.batch import (
     normalize_header,
     normalize_name_for_match,

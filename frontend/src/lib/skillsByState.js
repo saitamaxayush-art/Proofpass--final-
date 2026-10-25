@@ -1,4 +1,20 @@
 /**
+ * Normalizes a skill object or skill name to a deterministic anchor ID.
+ *
+ * @param {Object|string} skillOrName
+ * @returns {string}
+ */
+export function getSkillId(skillOrName) {
+  if (!skillOrName) return ''
+  if (typeof skillOrName === 'string') {
+    return skillOrName.toLowerCase().trim().replace(/[^a-z0-9]+/g, '-')
+  }
+  const rawName = skillOrName.skill || skillOrName.name || ''
+  const normKey = rawName.toLowerCase().trim()
+  return skillOrName.id || normKey.replace(/[^a-z0-9]+/g, '-')
+}
+
+/**
  * Pure function: Skills By State Categorizer
  * Groups a candidate's evaluated passport skills by state (V, S, C, X),
  * cross-referencing with role requirements and extracting evidence metadata.
@@ -31,7 +47,7 @@ export function getSkillsByState(passport, role) {
     const req = roleReqMap.get(normKey)
 
     // Deterministic slug-based skillId for passport anchors
-    const skillId = s.id || normKey.replace(/[^a-z0-9]+/g, '-')
+    const skillId = getSkillId(s)
 
     // Importance: 'Must' | 'Should' | 'Nice' or null
     const importance = req && req.importance ? req.importance : null
@@ -75,7 +91,12 @@ export function getSkillsByState(passport, role) {
       confidence = s.confidence
     } else if (Array.isArray(s.evidenceDetails) && s.evidenceDetails.length > 0) {
       const confs = s.evidenceDetails
-        .map((e) => (e && typeof e.confidence === 'number' ? e.confidence : null))
+        .map((e) => {
+          if (!e) return null
+          if (typeof e.confidence === 'number') return e.confidence
+          if (e.confidence && typeof e.confidence.value === 'number') return e.confidence.value
+          return null
+        })
         .filter((c) => c !== null)
       if (confs.length > 0) {
         confidence = Math.max(...confs)

@@ -32,44 +32,24 @@ from fastapi import APIRouter, BackgroundTasks, Depends, File, Form, HTTPExcepti
 from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
 
-try:
-    from backend.database import PassportRecord, get_db
-    from backend.verification.resume_extractor import extract_resume_text
-    from backend.verification.github_client import parse_github_url
-    from backend.verification import verify
-    from backend.verification.models import VerificationResult, UsageDepth
-    from backend.verification.platforms import collect_platform_evidence
-    from backend.intelligence.llm_service import extract_claims, parse_target_role
-    from backend.intelligence.models import (
-        ClaimState,
-        TrustCeiling,
-        SkillAssessment,
-        EvidenceChainItem,
-        PassportPayload,
-        TargetRole,
-    )
-    from backend.intelligence import assess_all, generate_micro_quiz, build_passport
-    from backend.api.orchestrator import _seal_passport, _persist_new_record
-    from backend.schemas import canonical_json_dumps
-except ImportError:
-    from database import PassportRecord, get_db
-    from verification.resume_extractor import extract_resume_text
-    from verification.github_client import parse_github_url
-    from verification import verify
-    from verification.models import VerificationResult, UsageDepth
-    from verification.platforms import collect_platform_evidence
-    from intelligence.llm_service import extract_claims, parse_target_role
-    from intelligence.models import (
-        ClaimState,
-        TrustCeiling,
-        SkillAssessment,
-        EvidenceChainItem,
-        PassportPayload,
-        TargetRole,
-    )
-    from intelligence import assess_all, generate_micro_quiz, build_passport
-    from api.orchestrator import _seal_passport, _persist_new_record
-    from schemas import canonical_json_dumps
+from backend.database import PassportRecord, get_db
+from backend.verification.resume_extractor import extract_resume_text
+from backend.verification.github_client import parse_github_url
+from backend.verification import verify
+from backend.verification.models import VerificationResult, UsageDepth
+from backend.verification.platforms import collect_platform_evidence
+from backend.intelligence.llm_service import extract_claims, parse_target_role
+from backend.intelligence.models import (
+    ClaimState,
+    TrustCeiling,
+    SkillAssessment,
+    EvidenceChainItem,
+    PassportPayload,
+    TargetRole,
+)
+from backend.intelligence import assess_all, generate_micro_quiz, build_passport
+from backend.api.orchestrator import _seal_passport, _persist_new_record
+from backend.schemas import canonical_json_dumps
 
 logger = logging.getLogger(__name__)
 

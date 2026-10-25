@@ -158,12 +158,12 @@ export default function CandidateCompare() {
     return (
       <main id="main" className="dash-page">
         <div className="w">
-          <div className="table-card glass" style={{ padding: '40px', textAlign: 'center' }}>
-            <span className="k m" style={{ color: 'var(--st-x)' }}>EVALUATION ERROR</span>
-            <h1 style={{ fontSize: '1.4rem', color: 'var(--ink)', margin: '12px 0 8px' }}>
+          <div className="table-card glass card-pad-36 text-center">
+            <span className="k m text-accent">EVALUATION ERROR</span>
+            <h1 className="section-title-sm mt-12 mb-8">
               Comparison Unavailable
             </h1>
-            <p style={{ color: 'var(--muted)', maxWidth: '480px', margin: '0 auto 20px', fontSize: '0.9rem' }}>
+            <p className="text-muted-sm max-w-480 mx-auto mb-20">
               {errorNotice || 'The requested role could not be evaluated.'}
             </p>
             <Link to={`/recruiter/role/${roleId}`} className="b sm">
@@ -181,24 +181,24 @@ export default function CandidateCompare() {
       <main id="main" className="dash-page">
         <div className="w">
           <div className="dash-header">
-            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '4px' }}>
-              <Link to={`/recruiter/role/${roleId}`} className="back-home-link" style={{ fontSize: '0.8rem' }}>
+            <div className="flex-center-gap8 mb-4">
+              <Link to={`/recruiter/role/${roleId}`} className="back-home-link text-sm">
                 ← Back to leaderboard
               </Link>
-              <span style={{ color: 'var(--faint)' }}>/</span>
+              <span className="text-faint">/</span>
               <span className="k m">{role.title}</span>
             </div>
             <h1 className="dash-title">Candidate Comparison</h1>
           </div>
 
-          <div className="table-card glass" style={{ padding: '48px 32px', textAlign: 'center' }}>
-            <div style={{ fontSize: '2rem', marginBottom: '12px' }} aria-hidden="true">
+          <div className="table-card glass card-pad-36 text-center">
+            <div className="empty-icon-lg" aria-hidden="true">
               ⚖️
             </div>
-            <h2 style={{ fontSize: '1.3rem', color: 'var(--ink)', margin: '0 0 8px', fontWeight: 600 }}>
+            <h2 className="section-title-sm mb-8">
               Pick at least 2 candidates to compare.
             </h2>
-            <p style={{ color: 'var(--muted)', maxWidth: '460px', margin: '0 auto 24px', fontSize: '0.9rem' }}>
+            <p className="text-muted-sm max-w-480 mx-auto mb-24">
               Select 2 or 3 evaluated candidates with verified skill passports from the role leaderboard.
             </p>
             <Link to={`/recruiter/role/${roleId}`} className="b sm">
@@ -217,13 +217,13 @@ export default function CandidateCompare() {
       <div className="w">
         {/* Navigation & Header */}
         <div className="dash-header">
-          <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '6px' }}>
-            <Link to={`/recruiter/role/${roleId}`} className="back-home-link" style={{ fontSize: '0.82rem' }}>
+          <div className="flex-center-gap8 mb-6">
+            <Link to={`/recruiter/role/${roleId}`} className="back-home-link text-sm">
               ← Back to leaderboard
             </Link>
-            <span style={{ color: 'var(--faint)' }}>/</span>
+            <span className="text-faint">/</span>
             <span className="k m">{role.company}</span>
-            <span style={{ color: 'var(--faint)' }}>/</span>
+            <span className="text-faint">/</span>
             <span className="k m">{role.title}</span>
           </div>
 
@@ -235,7 +235,7 @@ export default function CandidateCompare() {
               </p>
             </div>
 
-            <div style={{ display: 'flex', alignItems: 'center', gap: '14px', flexWrap: 'wrap' }}>
+            <div className="flex-center-gap12 flex-wrap">
               {/* Anonymous Screening Switch */}
               <label className="revoke-switch-label" title="Mask candidate names for unbiased screening">
                 <input
@@ -259,8 +259,8 @@ export default function CandidateCompare() {
             <table className="compare-table" role="table">
               <thead>
                 <tr>
-                  <th className="compare-row-label-col" scope="col">
-                    <span className="k m" style={{ color: 'var(--faint)' }}>METRIC / CANDIDATE</span>
+                  <th className="compare-row-label-col compare-sticky-label-col" scope="col">
+                    <span className="k m text-faint">METRIC / CANDIDATE</span>
                   </th>
                   {candidates.map((cand) => (
                     <th key={cand.id} className="compare-candidate-col" scope="col">
@@ -270,10 +270,10 @@ export default function CandidateCompare() {
                             {hideNames ? `Candidate #${cand.rank.toString().padStart(2, '0')}` : cand.name}
                           </strong>
                           {cand.isLiveDemo && (
-                            <span className="live-demo-tag" style={{ marginTop: '2px' }}>Live demo</span>
+                            <span className="live-demo-tag">Live demo</span>
                           )}
                           {cand.isRecruiterGenerated && (
-                            <span className="recruiter-tag" style={{ marginTop: '2px' }}>Recruiter generated</span>
+                            <span className="recruiter-tag">Recruiter generated</span>
                           )}
                         </div>
 
@@ -281,9 +281,8 @@ export default function CandidateCompare() {
                           {cand.passportId && (
                             <Link
                               to={`/passport/${cand.passportId}`}
-                              className="b sm g"
+                              className="b sm g btn-compact"
                               title="Inspect cryptographic passport and evidence"
-                              style={{ fontSize: '0.75rem', padding: '4px 8px' }}
                             >
                               View passport
                             </Link>
@@ -307,15 +306,15 @@ export default function CandidateCompare() {
               <tbody>
                 {/* ROW 1: Rank and match % (large number) */}
                 <tr className="compare-row">
-                  <th className="compare-row-label-cell" scope="row">
+                  <th className="compare-row-label-cell compare-sticky-label-col" scope="row">
                     <span className="compare-label-title">Rank & Match</span>
                     <span className="compare-label-hint">Overall weighted fit</span>
                   </th>
                   {candidates.map((cand) => (
                     <td key={cand.id} className="compare-data-cell">
                       <div className="compare-score-box">
-                        <div style={{ display: 'flex', alignItems: 'baseline', gap: '8px' }}>
-                          <span className={`rank-badge ${cand.rank === 1 ? 'top-1' : ''}`} style={{ width: '28px', height: '28px', fontSize: '0.85rem' }}>
+                        <div className="flex-baseline-gap8">
+                          <span className={`rank-badge rank-badge-sm ${cand.rank === 1 ? 'top-1' : ''}`}>
                             #{cand.rank}
                           </span>
                           <span className="compare-score-val">
@@ -330,9 +329,9 @@ export default function CandidateCompare() {
                   ))}
                 </tr>
 
-                {/* ROW 2: Skill states: four counts V, S, C, X as numbers with labels and thin share bars */}
+                {/* ROW 2: Skill states: four counts V, S, C, X as numbers with labels */}
                 <tr className="compare-row">
-                  <th className="compare-row-label-cell" scope="row">
+                  <th className="compare-row-label-cell compare-sticky-label-col" scope="row">
                     <span className="compare-label-title">Skill States</span>
                     <span className="compare-label-hint">V · S · C · X distribution</span>
                   </th>
@@ -353,14 +352,6 @@ export default function CandidateCompare() {
                             <strong>{cand.counts.X}</strong> Contradicted
                           </span>
                         </div>
-
-                        {/* Thin share bar matching leaderboard state mix bar */}
-                        <div className="state-mix-bar" style={{ height: '6px', marginTop: '8px' }} aria-hidden="true">
-                          <div className="mix-v" style={{ width: `${cand.stateShares.V}%` }} />
-                          <div className="mix-s" style={{ width: `${cand.stateShares.S}%` }} />
-                          <div className="mix-c" style={{ width: `${cand.stateShares.C}%` }} />
-                          <div className="mix-x" style={{ width: `${cand.stateShares.X}%` }} />
-                        </div>
                       </div>
                     </td>
                   ))}
@@ -368,7 +359,7 @@ export default function CandidateCompare() {
 
                 {/* ROW 3: Evidence freshness (latest evidence date) */}
                 <tr className="compare-row">
-                  <th className="compare-row-label-cell" scope="row">
+                  <th className="compare-row-label-cell compare-sticky-label-col" scope="row">
                     <span className="compare-label-title">Evidence Freshness</span>
                     <span className="compare-label-hint">Latest repository audit</span>
                   </th>
@@ -388,7 +379,7 @@ export default function CandidateCompare() {
 
                 {/* ROW 4: Key strengths: up to 3 required skills in state V, ordered by importance then freshness */}
                 <tr className="compare-row">
-                  <th className="compare-row-label-cell" scope="row">
+                  <th className="compare-row-label-cell compare-sticky-label-col" scope="row">
                     <span className="compare-label-title">Key Strengths</span>
                     <span className="compare-label-hint">Top verified required skills</span>
                   </th>
@@ -412,7 +403,7 @@ export default function CandidateCompare() {
 
                 {/* ROW 5: Concerns: up to 3 required skills (Contradicted first, then Claimed, then not on passport) */}
                 <tr className="compare-row">
-                  <th className="compare-row-label-cell" scope="row">
+                  <th className="compare-row-label-cell compare-sticky-label-col" scope="row">
                     <span className="compare-label-title">Concerns</span>
                     <span className="compare-label-hint">Contradicted, Claimed, Missing</span>
                   </th>
@@ -448,10 +439,10 @@ export default function CandidateCompare() {
                   <th colSpan={candidates.length + 1} className="compare-section-th">
                     <div className="skills-section-bar">
                       <div>
-                        <strong style={{ fontSize: '0.95rem', color: 'var(--ink)' }}>
+                        <strong className="compare-section-title">
                           Required Competencies Breakdown
                         </strong>
-                        <span style={{ fontSize: '0.8rem', color: 'var(--muted)', marginLeft: '10px' }}>
+                        <span className="compare-section-subtitle">
                           Ordered by importance: Must (3x) → Should (2x) → Nice (1x)
                         </span>
                       </div>
@@ -472,14 +463,14 @@ export default function CandidateCompare() {
                 {/* ROW 6 SUB-ROWS: One row per required skill */}
                 {displayedSkillsMatrix.length === 0 ? (
                   <tr>
-                    <td colSpan={candidates.length + 1} style={{ textAlign: 'center', padding: '32px', color: 'var(--muted)' }}>
+                    <td colSpan={candidates.length + 1} className="text-center pad-cell-32 text-muted-sm">
                       No skills meet the filter criteria (all evaluated candidates share the exact same state for all skills).
                     </td>
                   </tr>
                 ) : (
                   displayedSkillsMatrix.map((item) => (
                     <tr key={item.skill} className="compare-skill-row">
-                      <th className="compare-skill-label-cell" scope="row">
+                      <th className="compare-skill-label-cell compare-sticky-label-col" scope="row">
                         <div className="skill-label-content">
                           <strong className="skill-label-name">{item.skill}</strong>
                           <span className={`importance-tag ${item.importance.toLowerCase()}`}>
@@ -521,10 +512,17 @@ export default function CandidateCompare() {
                                 <strong>{letter}</strong> {stateText}
                               </span>
 
-                              {/* Strongest tag: marked only if strictly best state in row, ties get no tag */}
+                              {/* Strongest tag: single highlight style for strongest value */}
                               {st.isStrongest && (
-                                <span className="strongest-tag" title="Strictly highest verified state among compared candidates">
+                                <span className="compare-strongest-badge" title="Strictly highest verified state among compared candidates">
                                   Strongest
+                                </span>
+                              )}
+
+                              {/* Row-level confidence when present */}
+                              {st.confidenceText && (
+                                <span className="compare-conf-text" title={`Evidence confidence: ${st.confidenceText}`}>
+                                  {st.confidenceText}
                                 </span>
                               )}
                             </div>

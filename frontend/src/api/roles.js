@@ -78,6 +78,9 @@ export async function createRole(rolePayload) {
     description: rolePayload.description.trim(),
     requiredSkills: rolePayload.requiredSkills || [],
     demoCv: rolePayload.demoCv || '',
+    location: rolePayload.location ? rolePayload.location.trim() : null,
+    workMode: rolePayload.workMode || null,
+    minExperienceYears: rolePayload.minExperienceYears !== undefined && rolePayload.minExperienceYears !== null ? Number(rolePayload.minExperienceYears) : null,
     createdAt: new Date().toISOString(),
     updatedAt: new Date().toISOString(),
   }

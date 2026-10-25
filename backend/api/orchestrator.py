@@ -18,61 +18,33 @@ from typing import Any, Dict, List, Optional, Tuple
 
 from sqlalchemy.orm import Session
 
-try:
-    from backend.verification import verify, extract_resume_text
-    from backend.verification.models import (
-        Claim,
-        VerificationResult,
-        UsageDepth,
-    )
-    from backend.Intelligence.models import (
-        PassportPayload,
-        TargetRole,
-        QuizQuestion,
-        QuizAnswer,
-    )
-    from backend.Intelligence import (
-        extract_claims,
-        parse_target_role,
-        assess_all,
-        generate_micro_quiz,
-        evaluate_answer,
-        build_passport,
-    )
-    from backend.database import PassportRecord
-    from backend.schemas import (
-        canonical_json_dumps,
-        compute_integrity_hash,
-        QuizAnswerSubmission,
-        QuizEvaluationItem,
-    )
-
-except ImportError:
-    # Compatibility with the existing test setup, which adds backend/
-    # to sys.path and imports Intelligence as a top-level package.
-    from verification import verify, extract_resume_text
-    from verification.models import Claim, VerificationResult, UsageDepth
-    from Intelligence.models import (
-        PassportPayload,
-        TargetRole,
-        QuizQuestion,
-        QuizAnswer,
-    )
-    from Intelligence import (
-        extract_claims,
-        parse_target_role,
-        assess_all,
-        generate_micro_quiz,
-        evaluate_answer,
-        build_passport,
-    )
-    from database import PassportRecord
-    from schemas import (
-        canonical_json_dumps,
-        compute_integrity_hash,
-        QuizAnswerSubmission,
-        QuizEvaluationItem,
-    )
+from backend.verification import verify, extract_resume_text
+from backend.verification.models import (
+    Claim,
+    VerificationResult,
+    UsageDepth,
+)
+from backend.intelligence.models import (
+    PassportPayload,
+    TargetRole,
+    QuizQuestion,
+    QuizAnswer,
+)
+from backend.intelligence import (
+    extract_claims,
+    parse_target_role,
+    assess_all,
+    generate_micro_quiz,
+    evaluate_answer,
+    build_passport,
+)
+from backend.database import PassportRecord
+from backend.schemas import (
+    canonical_json_dumps,
+    compute_integrity_hash,
+    QuizAnswerSubmission,
+    QuizEvaluationItem,
+)
 
 
 logger = logging.getLogger(__name__)

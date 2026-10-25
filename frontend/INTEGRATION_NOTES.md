@@ -178,3 +178,104 @@ interface SkillsByStateReport {
 ### Tile Count Single Source of Truth
 The count displayed on each leaderboard state tile (Verified, Supported, Claimed, Contradicted) is derived directly from the length of `report[state]`. The four lengths sum to the candidate's total evaluated skills.
 
+---
+
+## Evidence Details Specification (`src/lib/evidenceDetails.js`)
+
+### Overview
+`evidenceDetails` enriches each skill on a cryptographic passport with real, verifiable excerpts, source badges, commit hashes, content digest snippets, confidence scores with factor breakdowns, and conflict reasons.
+Honesty rule: Excerpts are strictly verbatim snippets from the submitted repository code or resume lines, never generated or hallucinated by a model. When no text is available, `"No excerpt available"` is rendered. A skill with zero evidence has no confidence meter.
+
+### Cryptographic Boundary
+The SHA-256 seal of the passport is computed solely over `[skill, state, evidenceText]`. `evidenceDetails` are display and audit metadata. The cryptographic seal remains uncompromised and fully valid regardless of display detail enrichment.
+
+### Data Shape
+```typescript
+interface EvidenceConfidenceFactor {
+  label: string;       // e.g. "Source baseline", "Original line share (82%)", "Credibility score"
+  value: string;       // e.g. "80 max", "+66%", "72%"
+}
+
+interface EvidenceConfidence {
+  value: number;       // 0 to 100 integer
+  label: 'Low' | 'Medium' | 'High'; // < 40: Low, 40-69: Medium, 70+: High
+  factors: EvidenceConfidenceFactor[];
+}
+
+interface EvidenceDetail {
+  source: 'github' | 'resume' | 'certificate' | 'leetcode' | 'assessment';
+  label: string;       // e.g. "GitHub Repository", "From resume (a claim, not evidence)"
+  file: string | null; // e.g. "src/components/App.tsx"
+  commit: string | null; // 7-character commit SHA, e.g. "a1b2c3d"
+  url: string | null;  // Direct clickable link to commit or file
+  excerpt: string;     // Verbatim excerpt from source file or resume line
+  excerptSource: 'file' | 'resume' | 'sample';
+  matchedTerm: string; // The specific keyword or alias matched
+  contentHash: string | null; // 8-character SHA-256 snippet
+  flagReason: string | null;  // e.g. "Forked repo with 0 original commits" (Why it conflicts)
+  confidence: EvidenceConfidence | null; // null for skills with no evidence
+  fetchedAt: string;   // ISO timestamp
+}
+
+// Attached to each passport skill:
+interface PassportSkillWithEvidence {
+  skill: string;
+  state: 'V' | 'S' | 'C' | 'X';
+  evidence: string;
+  evidenceDetails?: EvidenceDetail[];
+}
+```
+
+### Engine vs. Backend Responsibilities
+
+#### Fields Supplied by Current Engine Run:
+1. `file`: Extracted from confirmed/flagged pointers in `step3_check_evidence.js`.
+2. `commit`: Extracted from pointer metadata or git log in `step1_read.js` / `step3_check_evidence.js`.
+3. `contentHash`: 8-character prefix of file SHA-256 digest computed in `step3_check_evidence.js`.
+4. `excerpt`: Verbatim text sliced from `readData.filesIndex[file].sample` or resume line matching alias taxonomy.
+5. `flagReason`: For `X` (Contradicted) skills, captured from `pointer.flagReason` in Step 3 / Step 5.
+6. `confidence`: Calculated by `src/lib/confidence.js` using engine lineShare and source ceilings (capped at 20 for resume).
+
+#### Row-Level Confidence Rule:
+Row-level confidence displays the highest confidence among a skill's evidence items as "{value}% {label}" (e.g. "72% High"), showing "No evidence" when evidenceDetails is empty, and omitted entirely for legacy passports without evidenceDetails.
+
+---
+
+## Job Description Import (`src/lib/jdReader.js` & `src/lib/jdParser.js`)
+
+### Overview
+The Job Description Import feature allows recruiters to ingest unstructured job specifications from uploaded documents (`.docx`, `.pdf`, `.txt`, `.md`) or pasted text into structured role criteria.
+Document reading and parsing are deterministic and executed entirely in the client's browser (with native `DecompressionStream('deflate-raw')` for DOCX and native `DOMParser`). PDFs are sent to `/api/v1/extract-resume` solely for text extraction.
+
+### Parser Output Contract (`parseJobDescription`)
+```typescript
+interface ParsedSkillRequirement {
+  skillId: string;       // Normalized slug e.g. "react", "typescript"
+  name: string;          // Formatted skill name e.g. "React", "TypeScript"
+  importance: 'Must' | 'Should' | 'Nice'; // Heading & line cue context
+  foundIn: string;       // Verbatim context sentence from JD (max 160 chars)
+  isCustom?: boolean;    // Flagged true if not found in TAXONOMY catalog
+}
+
+interface ParsedJobDescription {
+  title: string;         // Extracted role title
+  location: string | null; // e.g. "London, UK", "New York, NY"
+  workMode: 'Remote' | 'Hybrid' | 'On-site' | null;
+  minExperienceYears: number | null; // e.g. 4
+  skills: ParsedSkillRequirement[];  // Deduplicated (highest importance), max 15
+  cleanedText: string;   // Cleaned description text (min 40 characters)
+}
+```
+
+### Optional Role Fields (`src/api/roles.js`)
+Role objects are extended with optional metadata extracted from the job description:
+1. `location`: `string | null` - Geographical office or hiring location.
+2. `workMode`: `'Remote' | 'Hybrid' | 'On-site' | null` - Working model.
+3. `minExperienceYears`: `number | null` - Minimum years of professional experience.
+
+These fields are rendered as compact informational chips on role cards (`RecruiterDashboard.jsx`) and in the role detail header & requirements tab (`RecruiterRoleDetail.jsx`).
+
+### Backend Service Availability (`POST /api/v1/parse-role`)
+ProofPass backend implements `POST /api/v1/parse-role` accepting `{ jd_text: string, default_role_name?: string }` for future server-side AI/NLP parsing enhancements. In the current architecture, client-side deterministic parsing guarantees instantaneous zero-latency role ingestion with complete privacy.
+
+

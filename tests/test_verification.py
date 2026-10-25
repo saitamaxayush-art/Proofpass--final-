@@ -4,7 +4,7 @@ Unit tests for Member 3 (Evidence Verification Engine).
 import pytest
 from pydantic import ValidationError
 
-from verification.models import (
+from backend.verification.models import (
     Claim,
     Evidence,
     RepoMetadata,
@@ -89,7 +89,7 @@ import io
 import tempfile
 from pathlib import Path
 import pymupdf
-from verification.resume_extractor import extract_resume_text
+from backend.verification.resume_extractor import extract_resume_text
 
 
 def _create_sample_pdf(pages_text: list[str]) -> bytes:
@@ -161,7 +161,7 @@ def test_extract_resume_text_missing_file():
 
 import base64
 from unittest.mock import MagicMock
-from verification.github_client import (
+from backend.verification.github_client import (
     parse_github_url,
     GitHubClient,
     RepoNotFoundError,
@@ -279,7 +279,7 @@ def test_github_client_error_handling():
 # ---------------------------------------------------------------------------
 
 import hashlib
-from verification.detector import (
+from backend.verification.detector import (
     compute_content_sha256,
     classify_usage_depth,
     locate_evidence_for_claim,
@@ -381,7 +381,7 @@ def test_locate_evidence_missing_claim():
 # Milestone 5: Git Blame Authorship & Commit Velocity
 # ---------------------------------------------------------------------------
 
-from verification.git_engine import (
+from backend.verification.git_engine import (
     parse_git_blame_porcelain,
     compute_file_authorship,
     analyze_repo_commits,
@@ -443,6 +443,10 @@ def test_parse_git_blame_porcelain_none():
     assert signal == AuthorshipSignal.NONE
 
 
+is_git_checkout = (Path(__file__).resolve().parents[1] / ".git").exists()
+
+
+@pytest.mark.skipif(not is_git_checkout, reason="Project is not a git checkout")
 def test_compute_file_authorship_on_local_repo():
     # Real git blame on local workspace repo
     pct, signal = compute_file_authorship(
@@ -463,6 +467,7 @@ def test_compute_file_authorship_on_local_repo():
     assert signal_missing == AuthorshipSignal.NONE
 
 
+@pytest.mark.skipif(not is_git_checkout, reason="Project is not a git checkout")
 def test_analyze_repo_commits_on_local_repo():
     res = analyze_repo_commits(
         repo_path=".",
@@ -477,7 +482,7 @@ def test_analyze_repo_commits_on_local_repo():
 # Milestone 6: Conflict & Anti-Fraud Detection
 # ---------------------------------------------------------------------------
 
-from verification.heuristics import (
+from backend.verification.heuristics import (
     detect_conflicts_for_evidence,
     compute_provenance,
     is_tutorial_name,
@@ -567,9 +572,9 @@ def test_compute_provenance():
 # Milestone 7: Pipeline Assembly & Interoperability
 # ---------------------------------------------------------------------------
 
-from verification.verifier import verify
-from verification.fixtures import FIXTURE_CLAIMS
-from intelligence.state_engine import assess_all
+from backend.verification.verifier import verify
+from backend.verification.fixtures import FIXTURE_CLAIMS
+from backend.intelligence.state_engine import assess_all
 
 
 def test_verify_pipeline_strong_offline():

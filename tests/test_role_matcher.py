@@ -1,6 +1,6 @@
 import pytest
-from intelligence.role_matcher import match_role, compute_gaps, _canonical
-from intelligence.models import SkillAssessment, ClaimState, TrustCeiling, QuizStatus
+from backend.intelligence.role_matcher import match_role, compute_gaps, _canonical
+from backend.intelligence.models import SkillAssessment, ClaimState, TrustCeiling, QuizStatus
 
 
 def test_canonical_normalization():

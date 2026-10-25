@@ -1,11 +1,14 @@
 """
 Tests for LLM service using mock fallback (no real LLM calls).
 """
-import os
-os.environ["INTELLIGENCE_LLM_API_KEY"] = ""  # force fallback
-os.environ["INTELLIGENCE_FALLBACK_TO_MOCK"] = "true"
+import pytest
+from backend.intelligence.llm_service import extract_claims, parse_target_role, _sanitize
 
-from intelligence.llm_service import extract_claims, parse_target_role, _sanitize
+
+@pytest.fixture(autouse=True)
+def setup_mock_env(monkeypatch):
+    monkeypatch.setenv("INTELLIGENCE_LLM_API_KEY", "")
+    monkeypatch.setenv("INTELLIGENCE_FALLBACK_TO_MOCK", "true")
 
 
 def test_sanitize_strips_injection():

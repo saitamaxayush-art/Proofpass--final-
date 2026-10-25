@@ -6,6 +6,7 @@
 
 import { WEIGHTS } from '../data.js'
 import { rankApplicants } from './rank.js'
+import { getSkillConfidence } from './confidence.js'
 
 /**
  * Importance weight helper for sorting
@@ -237,6 +238,10 @@ export function buildComparison(role, applicants = []) {
       const match = skills.find((s) => s.skill.toLowerCase() === req.skill.toLowerCase())
 
       if (match) {
+        const hasAnyEvidenceDetails = skills.some((s) => Array.isArray(s.evidenceDetails))
+        const confInfo = getSkillConfidence(match, hasAnyEvidenceDetails)
+        const confidenceText = confInfo && confInfo.value != null ? confInfo.text : null
+
         return {
           applicantId: cand.id,
           candidateName: cand.name,
@@ -244,6 +249,7 @@ export function buildComparison(role, applicants = []) {
           level: match.level || 1,
           evidence: match.evidence || '',
           stateRank: getStateRank(match.state),
+          confidenceText,
         }
       }
 

@@ -11,14 +11,14 @@ import os
 import sys
 from pathlib import Path
 
-# Add backend to sys.path
-sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+# Add repo root to sys.path
+sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 
 import pymupdf
-from verification.models import Claim, TrustCeiling, UsageDepth, AuthorshipSignal
-from verification.resume_extractor import extract_resume_text
-from verification.verifier import verify
-from verification.fixtures import FIXTURE_CLAIMS
+from backend.verification.models import Claim, TrustCeiling, UsageDepth, AuthorshipSignal
+from backend.verification.resume_extractor import extract_resume_text
+from backend.verification.verifier import verify
+from backend.verification.fixtures import FIXTURE_CLAIMS
 
 
 def run_demo():

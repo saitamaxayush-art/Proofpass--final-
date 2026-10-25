@@ -2,10 +2,10 @@
 Unit tests for every state transition.
 """
 import pytest
-from intelligence.state_engine import (
+from backend.intelligence.state_engine import (
     determine_claim_state, assess_skill, assess_all, compute_credibility,
 )
-from intelligence.models import (
+from backend.intelligence.models import (
     Claim, Evidence, VerificationResult, RepoMetadata,
     ClaimState, TrustCeiling, UsageDepth, AuthorshipSignal,
 )

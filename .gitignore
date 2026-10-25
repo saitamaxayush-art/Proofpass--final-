@@ -12,9 +12,11 @@ __pycache__/
 .pytest_cache/
 .env
 .env.*
+!.env.example
 .env.local
 frontend/.env
 frontend/.env.*
+!frontend/.env.example
 frontend/.env.local
 .venv/
 env/

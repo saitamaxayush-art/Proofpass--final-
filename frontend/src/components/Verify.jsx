@@ -1,4 +1,4 @@
-import { useEffect, useLayoutEffect, useRef, useState } from 'react'
+import { useEffect, useLayoutEffect, useRef, useState, Fragment } from 'react'
 import { Link } from 'react-router-dom'
 import gsap from 'gsap'
 import Passport3D from './Passport3D.jsx'
@@ -31,8 +31,10 @@ import { useAuth } from '../auth/AuthContext.jsx'
 import { savePassport } from '../api/passports.js'
 import { buildRoadmapsForGaps } from '../lib/roadmap.js'
 import { saveRoadmapsFromVerification, updateRoadmapStep } from '../api/roadmaps.js'
-import { getGitHubSession, logoutGitHubSession } from '../api/auth.js'
+import { getGitHubSession, logoutGitHubSession, getAuthConfig } from '../api/auth.js'
 import { CodingProfilesField } from './CodingProfilesField.jsx'
+import { attachEvidenceDetailsToPassport } from '../lib/evidenceDetails.js'
+import { EvidenceCard } from './EvidenceCard.jsx'
 
 const STEP_DEFINITIONS = [
   { id: 0, title: 'Intake', subtitle: 'Form and consent' },
@@ -227,18 +229,34 @@ export default function Verify() {
     }
   }, [])
 
-  const handleConnectGitHub = () => {
+  const connectSampleGitHub = () => {
+    const mockUser = {
+      github_login: 'alexrivera-dev',
+      github_id: 8847291,
+      avatar_url: 'https://avatars.githubusercontent.com/u/8847291?v=4',
+      isMock: true,
+    }
+    setGithubUser(mockUser)
+    setAuthAnnouncement('Connected to demo GitHub account as @alexrivera-dev (Sample data).')
+    addLog('GitHub connected in mock mode: @alexrivera-dev (Sample data).')
+    setAuthError(null)
+  }
+
+  const handleConnectGitHub = async () => {
     setAuthError(null)
     if (isMockMode) {
-      const mockUser = {
-        github_login: 'alexrivera-dev',
-        github_id: 8847291,
-        avatar_url: 'https://avatars.githubusercontent.com/u/8847291?v=4',
-        isMock: true,
+      connectSampleGitHub()
+      return
+    }
+
+    try {
+      const config = await getAuthConfig()
+      if (!config?.github_oauth_configured) {
+        setAuthError('GitHub sign-in is not configured on this server yet. Use the sample GitHub account or upload a project ZIP.')
+        return
       }
-      setGithubUser(mockUser)
-      setAuthAnnouncement('Connected to demo GitHub account as @alexrivera-dev (Sample data).')
-      addLog('GitHub connected in mock mode: @alexrivera-dev (Sample data).')
+    } catch {
+      setAuthError('GitHub sign-in is not configured on this server yet. Use the sample GitHub account or upload a project ZIP.')
       return
     }
 
@@ -298,6 +316,14 @@ export default function Verify() {
   // Step 8 Verification / Tamper state
   const [hashCheckResult, setHashCheckResult] = useState(null)
   const [activeResultTab, setActiveResultTab] = useState('Candidate')
+  const [expandedResultSkills, setExpandedResultSkills] = useState({})
+
+  const toggleResultSkillExpand = (skillName) => {
+    setExpandedResultSkills((prev) => ({
+      ...prev,
+      [skillName]: !prev[skillName],
+    }))
+  }
 
   // Step 7 Close your gaps roadmaps state
   const [openGapSkill, setOpenGapSkill] = useState(null)
@@ -622,11 +648,23 @@ export default function Verify() {
         candidateName,
         addLog
       )
-      setPassportData(data)
+
+      // Attach rich evidenceDetails at passport issue/save time (never inside engine)
+      const enrichedPassport = attachEvidenceDetailsToPassport(data.passport, {
+        readData,
+        evidenceData,
+        authorshipData,
+        statesData,
+        intakeData,
+        user,
+      })
+      const finalData = { ...data, passport: enrichedPassport }
+
+      setPassportData(finalData)
       setStepStatus((s) => ({ ...s, 8: 'done' }))
       addLog('Verification pipeline completed. Passport issued and sealed.')
       try {
-        await savePassport(data.passport, user?.id)
+        await savePassport(enrichedPassport, user?.id)
         addLog('Cryptographic passport saved to user vault.')
       } catch (saveErr) {
         console.warn('Failed saving passport:', saveErr)
@@ -968,28 +1006,49 @@ export default function Verify() {
                                 alignItems: 'center',
                                 justifyContent: 'space-between',
                                 gap: '8px',
+                                flexWrap: 'wrap',
                               }}
                               role="alert"
                             >
                               <span>{authError}</span>
-                              <button
-                                type="button"
-                                onClick={handleConnectGitHub}
-                                style={{
-                                  background: 'none',
-                                  border: 'none',
-                                  color: 'inherit',
-                                  textDecoration: 'underline',
-                                  cursor: 'pointer',
-                                  fontSize: '0.82rem',
-                                  padding: '4px 8px',
-                                  minHeight: '44px',
-                                  display: 'inline-flex',
-                                  alignItems: 'center',
-                                }}
-                              >
-                                Retry
-                              </button>
+                              <div style={{ display: 'inline-flex', alignItems: 'center', gap: '8px' }}>
+                                <button
+                                  type="button"
+                                  onClick={connectSampleGitHub}
+                                  style={{
+                                    background: 'none',
+                                    border: 'none',
+                                    color: 'inherit',
+                                    textDecoration: 'underline',
+                                    cursor: 'pointer',
+                                    fontSize: '0.82rem',
+                                    padding: '4px 8px',
+                                    minHeight: '44px',
+                                    display: 'inline-flex',
+                                    alignItems: 'center',
+                                  }}
+                                >
+                                  Use sample GitHub account
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={handleConnectGitHub}
+                                  style={{
+                                    background: 'none',
+                                    border: 'none',
+                                    color: 'inherit',
+                                    textDecoration: 'underline',
+                                    cursor: 'pointer',
+                                    fontSize: '0.82rem',
+                                    padding: '4px 8px',
+                                    minHeight: '44px',
+                                    display: 'inline-flex',
+                                    alignItems: 'center',
+                                  }}
+                                >
+                                  Retry
+                                </button>
+                              </div>
                             </div>
                           )}
                         </div>
@@ -1698,6 +1757,9 @@ export default function Verify() {
                     <div className="passport-hash-box">
                       <span className="m hash-label">SHA-256 PASSPORT DIGEST:</span>
                       <code className="m">{passportData.hash}</code>
+                      <p style={{ margin: '8px 0 0', fontSize: '0.78rem', color: 'var(--muted)', lineHeight: '1.4' }}>
+                        Excerpts and confidence are display details. The seal covers skill, state and evidence text.
+                      </p>
                     </div>
 
                     <div className="hash-actions">
@@ -1775,13 +1837,45 @@ export default function Verify() {
                           </tr>
                         </thead>
                         <tbody>
-                          {passportData.passport.skills.map((s) => (
-                            <tr key={s.skill}>
-                              <td><strong>{s.skill}</strong></td>
-                              <td><span className={`chip ${s.state}`}>{s.state === 'V' ? 'VERIFIED' : s.state === 'S' ? 'SUPPORTED' : s.state === 'C' ? 'CLAIMED' : 'CONTRADICTED'}</span></td>
-                              <td>{s.evidence}</td>
-                            </tr>
-                          ))}
+                          {passportData.passport.skills.map((s) => {
+                            const isExpanded = !!expandedResultSkills[s.skill]
+                            const hasDetails = Array.isArray(s.evidenceDetails) && s.evidenceDetails.length > 0
+                            return (
+                              <Fragment key={s.skill}>
+                                <tr>
+                                  <td>
+                                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                                      <strong>{s.skill}</strong>
+                                      {hasDetails && (
+                                        <button
+                                          type="button"
+                                          className="evidence-expand-btn"
+                                          onClick={() => toggleResultSkillExpand(s.skill)}
+                                          aria-expanded={isExpanded}
+                                          title={isExpanded ? 'Collapse evidence audit' : 'Expand evidence audit'}
+                                        >
+                                          {isExpanded ? 'Hide audit ▲' : 'View audit ▼'}
+                                        </button>
+                                      )}
+                                    </div>
+                                  </td>
+                                  <td><span className={`chip ${s.state}`}>{s.state === 'V' ? 'VERIFIED' : s.state === 'S' ? 'SUPPORTED' : s.state === 'C' ? 'CLAIMED' : 'CONTRADICTED'}</span></td>
+                                  <td>{s.evidence}</td>
+                                </tr>
+                                {isExpanded && hasDetails && (
+                                  <tr className="evidence-audit-tr">
+                                    <td colSpan="3" style={{ padding: '12px 14px', background: 'var(--bg-subtle, rgba(0,0,0,0.02))' }}>
+                                      <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+                                        {s.evidenceDetails.map((detail, idx) => (
+                                          <EvidenceCard key={idx} detail={detail} evidence={detail} skillName={s.skill} />
+                                        ))}
+                                      </div>
+                                    </td>
+                                  </tr>
+                                )}
+                              </Fragment>
+                            )
+                          })}
                         </tbody>
                       </table>
                     </div>

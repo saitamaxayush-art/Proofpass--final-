@@ -1,6 +1,6 @@
 import pytest
-from intelligence.quiz_engine import generate_micro_quiz, evaluate_answer
-from intelligence.models import Claim, Evidence, QuizAnswer, QuestionType, UsageDepth, AuthorshipSignal
+from backend.intelligence.quiz_engine import generate_micro_quiz, evaluate_answer
+from backend.intelligence.models import Claim, Evidence, QuizAnswer, QuestionType, UsageDepth, AuthorshipSignal
 
 
 def test_generate_fallback_produces_questions(claims, code_snippets, commit_messages):
@@ -19,7 +19,7 @@ def test_generate_fallback_produces_questions(claims, code_snippets, commit_mess
 
 
 def test_evaluate_fake_premise_pushback():
-    from intelligence.models import QuizQuestion
+    from backend.intelligence.models import QuizQuestion
     q = QuizQuestion(
         question_id="q1", claim_id="c1", skill="React",
         question_type=QuestionType.FAKE_PREMISE,
@@ -32,7 +32,7 @@ def test_evaluate_fake_premise_pushback():
 
 
 def test_evaluate_fake_premise_accepts_fails():
-    from intelligence.models import QuizQuestion
+    from backend.intelligence.models import QuizQuestion
     q = QuizQuestion(
         question_id="q1", claim_id="c1", skill="React",
         question_type=QuestionType.FAKE_PREMISE,
@@ -45,7 +45,7 @@ def test_evaluate_fake_premise_accepts_fails():
 
 
 def test_evaluate_short_answer_fails():
-    from intelligence.models import QuizQuestion
+    from backend.intelligence.models import QuizQuestion
     q = QuizQuestion(
         question_id="q1", claim_id="c1", skill="React",
         question_type=QuestionType.BUSINESS_LOGIC,

@@ -1,19 +1,24 @@
 /**
  * Recruiter Dashboard Component
- * Displays role overview cards with candidate counts (with passport vs no passport),
- * and role creation modal.
+ * Clean table overview of active hiring roles: Role, Company, Applicants,
+ * With passport, Average match, and Updated date.
+ * Includes search filtering, "+ Add new role" creation, and zero inline styles.
  */
 
-import { useEffect, useState } from 'react'
-import { Link } from 'react-router-dom'
+import { useEffect, useState, useMemo } from 'react'
+import { Link, useNavigate } from 'react-router-dom'
 import { listRoles, createRole } from '../api/roles.js'
 import { listApplicantsForRole } from '../api/applicants.js'
+import { rankApplicants } from '../lib/rank.js'
 import { matchSkillsFromText } from '../data/taxonomy.js'
+import JobDescriptionImport from './JobDescriptionImport.jsx'
 
 export default function RecruiterDashboard() {
+  const navigate = useNavigate()
   const [roles, setRoles] = useState([])
-  const [roleCounts, setRoleCounts] = useState({})
+  const [roleStats, setRoleStats] = useState({})
   const [loading, setLoading] = useState(true)
+  const [searchQuery, setSearchQuery] = useState('')
   const [showAddRoleModal, setShowAddRoleModal] = useState(false)
   const [notice, setNotice] = useState(null)
 
@@ -22,6 +27,9 @@ export default function RecruiterDashboard() {
   const [newCompany, setNewCompany] = useState('')
   const [newDesc, setNewDesc] = useState('')
   const [newCv, setNewCv] = useState('')
+  const [newLocation, setNewLocation] = useState('')
+  const [newWorkMode, setNewWorkMode] = useState('')
+  const [newMinYears, setNewMinYears] = useState(null)
   const [newSkills, setNewSkills] = useState([
     { skill: 'React', importance: 'Must', weight: 3 },
     { skill: 'TypeScript', importance: 'Must', weight: 3 },
@@ -31,22 +39,49 @@ export default function RecruiterDashboard() {
   const [formErrors, setFormErrors] = useState({})
   const [isSubmitting, setIsSubmitting] = useState(false)
 
-  // Load roles and applicant counts
+  const handleApplyJdInAddRole = (applied) => {
+    if (applied.title) setNewTitle(applied.title)
+    if (applied.description) setNewDesc(applied.description)
+    if (applied.requiredSkills) setNewSkills(applied.requiredSkills)
+    if (applied.location) setNewLocation(applied.location)
+    if (applied.workMode) setNewWorkMode(applied.workMode)
+    if (applied.minExperienceYears != null) setNewMinYears(applied.minExperienceYears)
+    setFormErrors((prev) => ({ ...prev, title: null, desc: null }))
+  }
+
+  // Load roles and compute applicant stats
   const fetchRolesData = async () => {
     try {
       const allRoles = await listRoles()
       setRoles(allRoles)
 
-      const counts = {}
+      const stats = {}
       for (const r of allRoles) {
         const { withPassport, noPassport } = await listApplicantsForRole(r.id)
-        counts[r.id] = {
+        const ranked = rankApplicants(r, withPassport)
+        const avgMatch =
+          ranked.length > 0
+            ? Math.round(
+                ranked.reduce((sum, c) => sum + (c.score || 0), 0) / ranked.length
+              )
+            : null
+
+        const dateRaw = r.updatedAt || r.createdAt
+        stats[r.id] = {
           withPassport: withPassport.length,
           noPassport: noPassport.length,
           total: withPassport.length + noPassport.length,
+          avgMatch: avgMatch !== null ? `${avgMatch}%` : '—',
+          updatedDate: dateRaw
+            ? new Date(dateRaw).toLocaleDateString(undefined, {
+                month: 'short',
+                day: 'numeric',
+                year: 'numeric',
+              })
+            : '—',
         }
       }
-      setRoleCounts(counts)
+      setRoleStats(stats)
       setLoading(false)
     } catch (err) {
       setNotice(`Failed to load roles: ${err.message}`)
@@ -119,6 +154,9 @@ export default function RecruiterDashboard() {
         description: newDesc.trim(),
         requiredSkills: newSkills,
         demoCv: newCv.trim(),
+        location: newLocation ? newLocation.trim() : null,
+        workMode: newWorkMode || null,
+        minExperienceYears: newMinYears != null ? Number(newMinYears) : null,
       })
 
       setShowAddRoleModal(false)
@@ -126,6 +164,9 @@ export default function RecruiterDashboard() {
       setNewCompany('')
       setNewDesc('')
       setNewCv('')
+      setNewLocation('')
+      setNewWorkMode('')
+      setNewMinYears(null)
       setNewSkills([
         { skill: 'React', importance: 'Must', weight: 3 },
         { skill: 'TypeScript', importance: 'Must', weight: 3 },
@@ -139,13 +180,32 @@ export default function RecruiterDashboard() {
     }
   }
 
+  // Filtered roles by search query
+  const filteredRoles = useMemo(() => {
+    if (!searchQuery.trim()) return roles
+    const q = searchQuery.toLowerCase().trim()
+    return roles.filter(
+      (r) =>
+        (r.title && r.title.toLowerCase().includes(q)) ||
+        (r.company && r.company.toLowerCase().includes(q))
+    )
+  }, [roles, searchQuery])
+
   if (loading) {
     return (
       <main id="main" className="dash-page">
         <div className="w">
-          <div className="login-notice">
-            <span className="notice-dot" aria-hidden="true" />
-            <span>Loading recruiter dashboard...</span>
+          <div className="skeleton-list" aria-busy="true" aria-label="Loading recruiter workspace">
+            {[1, 2, 3].map((i) => (
+              <div key={i} className="skeleton-row">
+                <div className="skeleton-bar skeleton-w-180" />
+                <div className="skeleton-bar skeleton-w-90" />
+                <div className="skeleton-bar skeleton-w-60" />
+                <div className="skeleton-bar skeleton-w-60" />
+                <div className="skeleton-bar skeleton-w-60" />
+                <div className="skeleton-bar skeleton-w-90" />
+              </div>
+            ))}
           </div>
         </div>
       </main>
@@ -178,109 +238,180 @@ export default function RecruiterDashboard() {
         </div>
 
         {notice && (
-          <div className="login-notice" style={{ marginBottom: '20px' }} role="status">
+          <div className="login-notice mb-20" role="status">
             <span className="notice-dot" aria-hidden="true" />
             <span>{notice}</span>
           </div>
         )}
 
-        {/* Roles Grid */}
-        <div className="cards-grid">
-          {roles.map((role) => {
-            const counts = roleCounts[role.id] || { withPassport: 0, noPassport: 0, total: 0 }
-            return (
-              <div key={role.id} className="role-match-card">
-                <div>
-                  <div className="role-card-head">
-                    <div>
-                      <h2 className="role-card-title">{role.title}</h2>
-                      <p className="role-card-company">{role.company}</p>
-                    </div>
-                    {role.isSample && (
-                      <span className="chip S sm" style={{ fontSize: '0.68rem' }}>
-                        Sample role
-                      </span>
-                    )}
-                  </div>
+        {/* Roles Search Toolbar */}
+        <div className="roles-search-toolbar">
+          <input
+            type="search"
+            className="form-input sm roles-search-input"
+            placeholder="Search roles by title or company..."
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            aria-label="Search roles by title or company"
+          />
 
-                  <p style={{ fontSize: '0.85rem', color: 'var(--muted)', margin: '10px 0 16px', lineHeight: '1.45' }}>
-                    {role.description.length > 140
-                      ? `${role.description.slice(0, 140)}...`
-                      : role.description}
-                  </p>
-
-                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px', marginBottom: '16px' }}>
-                    <div style={{ padding: '10px 12px', background: 'var(--surface-2)', borderRadius: '8px', border: '1px solid var(--line-soft)' }}>
-                      <span style={{ fontSize: '0.72rem', fontFamily: 'var(--mono)', color: 'var(--faint)', display: 'block' }}>
-                        WITH PASSPORT
-                      </span>
-                      <strong style={{ fontSize: '1.2rem', color: 'var(--st-v)' }}>
-                        {counts.withPassport}
-                      </strong>
-                    </div>
-
-                    <div style={{ padding: '10px 12px', background: 'var(--surface-2)', borderRadius: '8px', border: '1px solid var(--line-soft)' }}>
-                      <span style={{ fontSize: '0.72rem', fontFamily: 'var(--mono)', color: 'var(--faint)', display: 'block' }}>
-                        RESUME ONLY
-                      </span>
-                      <strong style={{ fontSize: '1.2rem', color: 'var(--st-c)' }}>
-                        {counts.noPassport}
-                      </strong>
-                    </div>
-                  </div>
-
-                  <div className="role-card-skills">
-                    {(role.requiredSkills || []).map((req) => (
-                      <span key={req.skill} className="removable-tag" style={{ fontSize: '0.72rem' }}>
-                        {req.skill} <span style={{ color: 'var(--faint)' }}>({req.importance})</span>
-                      </span>
-                    ))}
-                  </div>
-                </div>
-
-                <div style={{ borderTop: '1px solid var(--line-soft)', paddingTop: '14px', marginTop: '12px' }}>
-                  <Link to={`/recruiter/role/${role.id}`} className="b sm" style={{ width: '100%', textAlign: 'center', display: 'block' }}>
-                    Open candidate leaderboard →
-                  </Link>
-                </div>
-              </div>
-            )
-          })}
+          <span className="lb-filter-count">
+            {filteredRoles.length} role{filteredRoles.length === 1 ? '' : 's'}
+          </span>
         </div>
 
-        {/* Add Role Modal */}
+        {/* Roles Table (Item 1: Clean table, not cards) */}
+        {roles.length === 0 ? (
+          <div className="table-card glass roles-empty-state">
+            <p>No hiring roles created yet.</p>
+            <button
+              type="button"
+              className="b sm"
+              onClick={() => setShowAddRoleModal(true)}
+            >
+              + Add new role
+            </button>
+          </div>
+        ) : filteredRoles.length === 0 ? (
+          <div className="table-card glass roles-empty-state">
+            <p>No roles found matching "{searchQuery}".</p>
+            <button
+              type="button"
+              className="b sm g"
+              onClick={() => setSearchQuery('')}
+            >
+              Clear search
+            </button>
+          </div>
+        ) : (
+          <div className="table-card glass">
+            <div className="responsive-table-wrapper" data-lenis-prevent>
+              <table className="dash-table" role="table">
+                <thead>
+                  <tr>
+                    <th scope="col">Role</th>
+                    <th scope="col">Company</th>
+                    <th scope="col">Applicants</th>
+                    <th scope="col">With passport</th>
+                    <th scope="col">Average match</th>
+                    <th scope="col">Updated</th>
+                    <th scope="col" className="text-right">Action</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {filteredRoles.map((role) => {
+                    const stats = roleStats[role.id] || {
+                      total: 0,
+                      withPassport: 0,
+                      avgMatch: '—',
+                      updatedDate: '—',
+                    }
+
+                    return (
+                      <tr
+                        key={role.id}
+                        className="clickable-row"
+                        onClick={() => navigate(`/recruiter/role/${role.id}`)}
+                      >
+                        <td data-label="Role" className="role-title-cell">
+                          <Link
+                            to={`/recruiter/role/${role.id}`}
+                            onClick={(e) => e.stopPropagation()}
+                          >
+                            {role.title}
+                          </Link>
+                          {(role.location || role.workMode) && (
+                            <div className="role-meta-line mt-4">
+                              {role.location && <span>📍 {role.location}</span>}
+                              {role.location && role.workMode && (
+                                <span className="role-meta-dot" aria-hidden="true">·</span>
+                              )}
+                              {role.workMode && <span>💼 {role.workMode}</span>}
+                            </div>
+                          )}
+                        </td>
+
+                        <td data-label="Company">
+                          <span className="text-muted-sm">{role.company}</span>
+                        </td>
+
+                        <td data-label="Applicants">
+                          <strong>{stats.total}</strong>
+                        </td>
+
+                        <td data-label="With passport">
+                          <span className="stat-tag-v">
+                            <strong>{stats.withPassport}</strong>
+                          </span>
+                        </td>
+
+                        <td data-label="Average match">
+                          <span className="lb-match-val-accent">
+                            <strong>{stats.avgMatch}</strong>
+                          </span>
+                        </td>
+
+                        <td data-label="Updated">
+                          <span className="text-muted-sm">{stats.updatedDate}</span>
+                        </td>
+
+                        <td data-label="Action" className="text-right">
+                          <Link
+                            to={`/recruiter/role/${role.id}`}
+                            className="b sm g"
+                            onClick={(e) => e.stopPropagation()}
+                          >
+                            View role →
+                          </Link>
+                        </td>
+                      </tr>
+                    )
+                  })}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        )}
+
+        {/* Add Role Modal with zero inline styles */}
         {showAddRoleModal && (
           <div
-            style={{
-              position: 'fixed',
-              inset: 0,
-              background: 'rgba(0, 0, 0, 0.65)',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              zIndex: 1000,
-              padding: '20px',
-            }}
+            className="modal-backdrop"
             onClick={() => setShowAddRoleModal(false)}
+            role="dialog"
+            aria-modal="true"
+            aria-label="Create job role"
           >
             <div
-              className="table-card glass"
-              style={{ maxWidth: '600px', width: '100%', maxHeight: '90vh', overflowY: 'auto', padding: '28px', margin: 0 }}
+              className="modal-dialog"
               onClick={(e) => e.stopPropagation()}
               data-lenis-prevent
             >
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
-                <h2 style={{ fontSize: '1.3rem', fontWeight: 700, margin: 0, color: 'var(--ink)' }}>
+              <div className="modal-header-row">
+                <h2 className="section-title-sm">
                   Create Job Role
                 </h2>
                 <button
                   type="button"
                   className="b sm g"
                   onClick={() => setShowAddRoleModal(false)}
+                  aria-label="Close modal"
                 >
-                  ✕ Close
+                  ✕
                 </button>
               </div>
+
+              <JobDescriptionImport
+                currentValues={{
+                  title: newTitle,
+                  description: newDesc,
+                  requiredSkills: newSkills,
+                  location: newLocation,
+                  workMode: newWorkMode,
+                  minExperienceYears: newMinYears,
+                }}
+                onApply={handleApplyJdInAddRole}
+              />
 
               <form onSubmit={handleCreateRole}>
                 <div className="form-group">
@@ -301,28 +432,58 @@ export default function RecruiterDashboard() {
                   <input
                     type="text"
                     className="form-input"
-                    placeholder="e.g. Veloce Systems"
+                    placeholder="e.g. Acme Health Tech"
                     value={newCompany}
                     onChange={(e) => setNewCompany(e.target.value)}
                   />
                 </div>
 
-                <div className="form-group">
-                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                    <label className="form-label">Requirement Description (min 40 chars)</label>
-                    <button
-                      type="button"
-                      className="b sm g"
-                      style={{ fontSize: '0.72rem', padding: '2px 8px' }}
-                      onClick={handleSuggest}
-                    >
-                      Suggest skills from text
-                    </button>
+                <div className="gap-form-row">
+                  <div className="form-group">
+                    <label className="form-label">Location (optional)</label>
+                    <input
+                      type="text"
+                      className="form-input"
+                      placeholder="e.g. London, UK"
+                      value={newLocation}
+                      onChange={(e) => setNewLocation(e.target.value)}
+                    />
                   </div>
+
+                  <div className="form-group">
+                    <label className="form-label">Workplace Model (optional)</label>
+                    <select
+                      className="form-input"
+                      value={newWorkMode}
+                      onChange={(e) => setNewWorkMode(e.target.value)}
+                    >
+                      <option value="">None specified</option>
+                      <option value="Remote">Remote</option>
+                      <option value="Hybrid">Hybrid</option>
+                      <option value="On-site">On-site</option>
+                    </select>
+                  </div>
+                </div>
+
+                <div className="form-group">
+                  <label className="form-label">Min Experience (Years, optional)</label>
+                  <input
+                    type="number"
+                    min="0"
+                    max="30"
+                    className="form-input"
+                    placeholder="e.g. 4"
+                    value={newMinYears ?? ''}
+                    onChange={(e) => setNewMinYears(e.target.value ? Number(e.target.value) : null)}
+                  />
+                </div>
+
+                <div className="form-group">
+                  <label className="form-label">Job Requirement Description</label>
                   <textarea
                     rows="3"
                     className={`form-input ${formErrors.desc ? 'input-error' : ''}`}
-                    placeholder="Describe core technical requirements and architecture expectations..."
+                    placeholder="Describe role responsibilities, tech stack, and evaluation context..."
                     value={newDesc}
                     onChange={(e) => setNewDesc(e.target.value)}
                     required
@@ -330,14 +491,25 @@ export default function RecruiterDashboard() {
                   {formErrors.desc && <span className="field-error-msg">{formErrors.desc}</span>}
                 </div>
 
-                {/* Skills configuration */}
+                {/* Skills Taxonomy Section */}
                 <div className="form-group">
-                  <label className="form-label">Weighted Required Skills</label>
-                  <div style={{ display: 'flex', gap: '8px' }}>
+                  <div className="table-head-row-between mb-8">
+                    <label className="form-label">Required Skills & Weighting</label>
+                    <button
+                      type="button"
+                      className="b sm g"
+                      onClick={handleSuggest}
+                      title="Auto-detect skills mentioned in description"
+                    >
+                      ✨ Auto-suggest from description
+                    </button>
+                  </div>
+
+                  <div className="add-skill-row mb-12">
                     <input
                       type="text"
                       className="form-input sm"
-                      placeholder="Add skill"
+                      placeholder="Skill name (e.g. Docker, SQL)"
                       value={addSkillInput}
                       onChange={(e) => setAddSkillInput(e.target.value)}
                       onKeyDown={(e) => {
@@ -348,8 +520,7 @@ export default function RecruiterDashboard() {
                       }}
                     />
                     <select
-                      className="form-input sm"
-                      style={{ width: '110px' }}
+                      className="form-input sm w-select-importance"
                       value={addSkillImportance}
                       onChange={(e) => setAddSkillImportance(e.target.value)}
                     >
@@ -366,7 +537,11 @@ export default function RecruiterDashboard() {
                     {newSkills.map((req) => (
                       <span key={req.skill} className="removable-tag">
                         <strong>{req.skill}</strong> ({req.importance})
-                        <button type="button" onClick={() => handleRemoveSkill(req.skill)}>
+                        <button
+                          type="button"
+                          onClick={() => handleRemoveSkill(req.skill)}
+                          aria-label={`Remove ${req.skill}`}
+                        >
                           ×
                         </button>
                       </span>
@@ -374,23 +549,21 @@ export default function RecruiterDashboard() {
                   </div>
                 </div>
 
+                {/* Demo CV Viewer Input */}
                 <div className="form-group">
-                  <label className="form-label">Demo Candidate CV text <span style={{ color: 'var(--faint)' }}>(optional)</span></label>
+                  <label className="form-label">Demo Candidate CV Reference</label>
                   <textarea
-                    rows="2"
+                    rows="3"
                     className="form-input sm"
-                    placeholder="Paste sample resume text for testing..."
+                    placeholder="Paste reference resume text to map competencies against..."
                     value={newCv}
                     onChange={(e) => setNewCv(e.target.value)}
                   />
                 </div>
 
-                <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '10px', marginTop: '20px' }}>
-                  <button type="button" className="b sm g" onClick={() => setShowAddRoleModal(false)}>
-                    Cancel
-                  </button>
+                <div className="flex-end-mt20">
                   <button type="submit" className="b sm" disabled={isSubmitting}>
-                    {isSubmitting ? 'Creating...' : 'Save role opening'}
+                    {isSubmitting ? 'Creating role...' : 'Create Role'}
                   </button>
                 </div>
               </form>

@@ -1,21 +1,13 @@
 import sys
 from pathlib import Path
 
-# Add backend/ to path so `from intelligence...` works
-BACKEND = Path(__file__).resolve().parents[1] / "backend"
-sys.path.insert(0, str(BACKEND))
-
-import intelligence  # type: ignore
-import intelligence.models  # type: ignore
-sys.modules["Intelligence"] = intelligence
-sys.modules["Intelligence.models"] = intelligence.models
-sys.modules["backend.Intelligence"] = intelligence
-sys.modules["backend.Intelligence.models"] = intelligence.models
-sys.modules["backend.intelligence"] = intelligence
-sys.modules["backend.intelligence.models"] = intelligence.models
+# Put repo root on sys.path so `from backend...` works
+REPO_ROOT = Path(__file__).resolve().parents[1]
+if str(REPO_ROOT) not in sys.path:
+    sys.path.insert(0, str(REPO_ROOT))
 
 import pytest
-from intelligence.fixtures import (
+from backend.intelligence.fixtures import (
     MOCK_CLAIMS, MOCK_VERIFICATION_STRONG, MOCK_VERIFICATION_CONFLICT,
     MOCK_VERIFICATION_WEAK, MOCK_TARGET_ROLE, MOCK_CODE_SNIPPETS, MOCK_COMMIT_MESSAGES,
 )

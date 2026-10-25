@@ -212,3 +212,24 @@ export async function logoutGitHubSession() {
     return false
   }
 }
+
+/**
+ * Retrieve server authentication configuration.
+ *
+ * @returns {Promise<{ github_oauth_configured: boolean }>}
+ */
+export async function getAuthConfig() {
+  try {
+    const res = await fetch('/api/v1/auth/config', {
+      method: 'GET',
+      credentials: 'include',
+    })
+    if (!res.ok) {
+      return { github_oauth_configured: false }
+    }
+    return await res.json()
+  } catch {
+    return { github_oauth_configured: false }
+  }
+}
+

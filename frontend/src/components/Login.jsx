@@ -8,6 +8,7 @@ import { useState } from 'react'
 import { Link, useLocation, useNavigate } from 'react-router-dom'
 import { useAuth } from '../auth/AuthContext.jsx'
 import Seg from './Seg.jsx'
+import JobDescriptionImport from './JobDescriptionImport.jsx'
 import { matchSkillsFromText, TAXONOMY } from '../data/taxonomy.js'
 
 export default function Login() {
@@ -50,6 +51,23 @@ export default function Login() {
   ])
   const [newSkillName, setNewSkillName] = useState('')
   const [newSkillImportance, setNewSkillImportance] = useState('Must')
+  const [recruiterLocation, setRecruiterLocation] = useState('')
+  const [recruiterWorkMode, setRecruiterWorkMode] = useState('')
+  const [recruiterMinYears, setRecruiterMinYears] = useState(null)
+
+  const handleApplyJdInSignup = (applied) => {
+    if (applied.title) setRoleHiringFor(applied.title)
+    if (applied.description) setRoleDescription(applied.description)
+    if (applied.requiredSkills) setRequiredSkills(applied.requiredSkills)
+    if (applied.location) setRecruiterLocation(applied.location)
+    if (applied.workMode) setRecruiterWorkMode(applied.workMode)
+    if (applied.minExperienceYears != null) setRecruiterMinYears(applied.minExperienceYears)
+    setErrors((prev) => ({
+      ...prev,
+      roleHiringFor: null,
+      roleDescription: null,
+    }))
+  }
 
   // Validation & Status
   const [errors, setErrors] = useState({})
@@ -236,6 +254,9 @@ export default function Login() {
                 description: roleDescription.trim(),
                 demoCv: demoCvText || demoCvFileName,
                 requiredSkills,
+                location: recruiterLocation || null,
+                workMode: recruiterWorkMode || null,
+                minExperienceYears: recruiterMinYears != null ? Number(recruiterMinYears) : null,
               }
 
         const user = await signup({
@@ -571,6 +592,39 @@ export default function Login() {
                   />
                   {errors.roleHiringFor && <span className="field-error-msg">{errors.roleHiringFor}</span>}
                 </div>
+
+                {/* Job Description Importer */}
+                <JobDescriptionImport
+                  currentValues={{
+                    title: roleHiringFor,
+                    description: roleDescription,
+                    requiredSkills,
+                    location: recruiterLocation,
+                    workMode: recruiterWorkMode,
+                    minExperienceYears: recruiterMinYears,
+                  }}
+                  onApply={handleApplyJdInSignup}
+                />
+
+                {(recruiterLocation || recruiterWorkMode || recruiterMinYears != null) && (
+                  <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap', marginBottom: '10px' }}>
+                    {recruiterLocation && (
+                      <span className="chip sm" style={{ fontSize: '0.72rem' }}>
+                        📍 {recruiterLocation}
+                      </span>
+                    )}
+                    {recruiterWorkMode && (
+                      <span className="chip sm S" style={{ fontSize: '0.72rem' }}>
+                        💼 {recruiterWorkMode}
+                      </span>
+                    )}
+                    {recruiterMinYears != null && (
+                      <span className="chip sm" style={{ fontSize: '0.72rem' }}>
+                        ⏳ {recruiterMinYears}+ yrs exp
+                      </span>
+                    )}
+                  </div>
+                )}
 
                 <div className="form-group">
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>

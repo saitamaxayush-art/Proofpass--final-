@@ -6,25 +6,21 @@ import os
 import sys
 from pathlib import Path
 
-# Ensure backend/ is on path
-sys.path.insert(0, str(Path(__file__).resolve().parent / "backend"))
-
-try:
-    import intelligence
-except ModuleNotFoundError:
-    import Intelligence
-    sys.modules["intelligence"] = Intelligence
+# Ensure repo root is on path
+REPO_ROOT = Path(__file__).resolve().parent
+if str(REPO_ROOT) not in sys.path:
+    sys.path.insert(0, str(REPO_ROOT))
 
 os.environ.setdefault("INTELLIGENCE_LLM_API_KEY", "")
 os.environ.setdefault("INTELLIGENCE_FALLBACK_TO_MOCK", "true")
 
-from intelligence.fixtures import (
+from backend.intelligence.fixtures import (
     MOCK_CLAIMS, MOCK_VERIFICATION_STRONG, MOCK_TARGET_ROLE,
     MOCK_CODE_SNIPPETS, MOCK_COMMIT_MESSAGES,
 )
-from intelligence.state_engine import assess_all
-from intelligence.quiz_engine import generate_micro_quiz
-from intelligence.passport_builder import build_passport
+from backend.intelligence.state_engine import assess_all
+from backend.intelligence.quiz_engine import generate_micro_quiz
+from backend.intelligence.passport_builder import build_passport
 
 
 def main():

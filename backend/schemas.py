@@ -9,12 +9,8 @@ from datetime import datetime
 from typing import Any, Dict, List, Optional
 from pydantic import BaseModel, ConfigDict, Field, field_validator, AliasChoices
 
-try:
-    from backend.verification.models import QuestionType
-    from backend.Intelligence.models import PassportPayload
-except ImportError:
-    from verification.models import QuestionType
-    from Intelligence.models import PassportPayload
+from backend.verification.models import QuestionType
+from backend.intelligence.models import PassportPayload
 
 
 def canonical_json_dumps(obj: Any) -> str:

@@ -61,6 +61,25 @@ export async function getPassport(passportId) {
  * Save an issued skill passport.
  * Future backend endpoint: POST /api/v1/passports
  *
+ * // BACKEND: POST /api/v1/passports must accept and persist the rich evidenceDetails array
+ * // attached to each skill:
+ * // Array<{
+ * //   source: 'github' | 'resume' | 'certificate' | 'leetcode' | 'assessment',
+ * //   label: string,
+ * //   file: string | null,
+ * //   commit: string | null, // 7-char commit hash
+ * //   url: string | null,
+ * //   excerpt: string, // Real verbatim excerpt from repository file or resume
+ * //   excerptSource: 'file' | 'resume' | 'sample',
+ * //   matchedTerm: string,
+ * //   contentHash: string | null, // 8-char SHA-256 snippet
+ * //   flagReason: string | null,
+ * //   confidence: { value: number, label: 'Low' | 'Medium' | 'High', factors: Array<{ label: string, value: string }> },
+ * //   fetchedAt: string // ISO date string
+ * // }>
+ * // NOTE: Cryptographic SHA-256 integrity covers [skill, state, evidence] text.
+ * // evidenceDetails are display metadata that enrich candidate audit trails.
+ *
  * @param {Object} passport - Full passport payload { id, candidate, targetRole, issuedAt, hash, skills, ... }
  * @param {string} [userId]
  * @returns {Promise<Object>}

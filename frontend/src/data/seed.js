@@ -12,7 +12,9 @@
  * No Math.random: completely deterministic on every reload.
  */
 
-export const SEED_VERSION = 2
+import { getConfidence } from '../lib/confidence.js'
+
+export const SEED_VERSION = 3
 
 export const SAMPLE_ROLES = [
   {
@@ -787,6 +789,144 @@ const CANDIDATE_PROFILES = [
   },
 ]
 
+const SAMPLE_EXCERPTS = {
+  React: 'export function useVirtualizer({ count, estimateSize }) {\n  const [scrollOffset, setScrollOffset] = useState(0);\n  const totalSize = count * estimateSize;\n  return { totalSize, virtualItems };\n}',
+  TypeScript: 'export type AsyncResult<T, E = Error> = { ok: true; data: T } | { ok: false; error: E };\nexport interface Repository<T> { findById(id: string): Promise<AsyncResult<T>>; }',
+  'REST APIs': "app.get('/api/v1/resources', authMiddleware, async (req, res) => {\n  const items = await service.list({ limit: req.query.limit || 20 });\n  return res.json({ items });\n});",
+  Testing: "describe('Authentication suite', () => {\n  it('rejects invalid state parameter with 401', async () => {\n    const res = await request(app).get('/callback?state=wrong');\n    expect(res.status).toBe(401);\n  });\n});",
+  Docker: 'FROM node:20-alpine AS build\nWORKDIR /app\nCOPY package*.json ./\nRUN npm ci\nCOPY . .\nRUN npm run build\nEXPOSE 3000',
+  PostgreSQL: "CREATE INDEX idx_audit_created ON audit_logs (tenant_id, created_at DESC);\nSELECT skill, COUNT(*) FROM verifications WHERE state = 'V' GROUP BY skill;",
+  'Git workflow': 'commit 3f9a12c (HEAD -> main, origin/main)\nAuthor: candidate\nDate: Mon Nov 18 14:22:01 2024\nfeat: implement zero-downtime database migration schema',
+  Python: 'class AsynchronousWorkerPool:\n    def __init__(self, max_concurrency: int = 10) -> None:\n        self._semaphore = asyncio.Semaphore(max_concurrency)\n        self._active = set()',
+  AWS: 'resource "aws_s3_bucket" "audit_vault" {\n  bucket        = "proofpass-audit-logs"\n  force_destroy = false\n  lifecycle { prevent_destroy = true }\n}',
+  Kubernetes: 'apiVersion: apps/v1\nkind: Deployment\nmetadata:\n  name: pipeline-worker\nspec:\n  replicas: 3\n  template:\n    spec:\n      containers:\n      - name: worker',
+  JavaScript: 'export async function fetchWithRetry(url, options = {}, retries = 3) {\n  for (let attempt = 1; attempt <= retries; attempt++) {\n    try { return await fetch(url, options); }\n    catch (err) { if (attempt === retries) throw err; }\n  }\n}',
+  'Node.js': "const cluster = require('cluster');\nconst http = require('http');\nif (cluster.isPrimary) {\n  for (let i = 0; i < os.cpus().length; i++) cluster.fork();\n}",
+  'System design': '## High-Throughput Ingestion Architecture\n- Client requests stream through edge API gateway with token-bucket rate limiting\n- Background workers process async batches via persistent queue',
+  Redis: 'async function getOrSetCache(key, ttlSec, fetcher) {\n  const cached = await redis.get(key);\n  if (cached) return JSON.parse(cached);\n  const fresh = await fetcher();\n  await redis.setex(key, ttlSec, JSON.stringify(fresh));\n  return fresh;\n}',
+  GraphQL: 'type Query {\n  candidatePassport(id: ID!): SkillPassport\n  verifiedSkills(filter: StateFilter): [SkillAuditRecord!]!\n}',
+  Go: 'func HandleStream(w http.ResponseWriter, r *http.Request) {\n\tflusher, ok := w.(http.Flusher)\n\tif !ok { http.Error(w, "Streaming unsupported", 500); return }\n}',
+  Rust: 'pub fn process_records<T: Record>(stream: impl Iterator<Item = T>) -> Result<Summary, AuditError> {\n    let mut state = State::new();\n    state.collect(stream)\n}',
+  Java: 'public class ConnectionPoolManager implements AutoCloseable {\n    private final BlockingQueue<Connection> pool;\n    public Connection acquire() throws InterruptedException { return pool.take(); }\n}',
+  'C++': 'template <typename T>\nclass RingBuffer {\npublic:\n    explicit RingBuffer(size_t capacity) : cap_(capacity), head_(0), tail_(0) {}\n};',
+  'C#': 'public async Task<ActionResult<PassportDto>> GetPassportAsync(string id) {\n    var record = await _dbContext.Passports.FindAsync(id);\n    return record is null ? NotFound() : Ok(record);\n}',
+  'HTML/CSS': '@container (min-width: 480px) {\n  .candidate-card { display: grid; grid-template-columns: 1fr 2fr; gap: 1rem; }\n}',
+  Tailwind: '@layer components {\n  .btn-accent { @apply px-4 py-2 bg-indigo-600 text-white rounded-lg shadow-sm hover:bg-indigo-700; }\n}',
+  'CI/CD': 'name: CI Verification Pipeline\non: [push, pull_request]\njobs:\n  audit:\n    runs-on: ubuntu-latest\n    steps:\n    - uses: actions/checkout@v4',
+  Linux: '#!/usr/bin/env bash\nset -euo pipefail\nchmod 600 /etc/security/audit.key\nsystemctl restart auditd',
+}
+
+function buildSampleSkillEvidenceDetails(s, cand, applicant, idx, skillIdx, fetchedAt) {
+  const evText = String(s.evidence || '')
+  const hasFile = evText.match(/([a-zA-Z0-9_\-./]+\.[a-zA-Z0-9]+)/)
+  const defaultFile = `src/${s.skill.toLowerCase().replace(/[^a-z0-9]/g, '')}.ts`
+  const filePath = hasFile ? hasFile[0] : (s.state === 'V' || s.state === 'S' || s.state === 'X' ? defaultFile : null)
+
+  const candidateSlug = cand.name.toLowerCase().replace(/[^a-z]/g, '')
+  const excerptText =
+    SAMPLE_EXCERPTS[s.skill] ||
+    `// Verified ${s.skill} module implementation\nexport class ${s.skill.replace(/[^a-zA-Z0-9]/g, '')}Service {\n  constructor() {}\n}`
+
+  // 1. Contradicted
+  if (s.state === 'X') {
+    const flagReason = s.why || 'Contradicted: On resume as a skill claim, but evidence conflicts with claim (e.g. forked tutorial with zero original commits).'
+    return [
+      {
+        source: 'github',
+        label: 'Why it conflicts',
+        file: filePath || 'tutorial/repo/index.js',
+        commit: 'f0rked0',
+        url: null,
+        excerpt: '// Cloned from upstream tutorial repository\n// 0 commits authored by candidate in git log',
+        excerptSource: 'sample',
+        matchedTerm: s.skill,
+        contentHash: 'f0rked01',
+        flagReason,
+        confidence: getConfidence({ source: 'github', credibility: 0.0, lineShare: 0 }),
+        fetchedAt,
+      },
+    ]
+  }
+
+  // 2. Verified
+  if (s.state === 'V') {
+    const cred = 0.76 + ((idx * 5 + skillIdx * 3) % 18) / 100
+    const lineShare = Math.round(cred * 100)
+    const commitHash = `c${(idx * 7 + skillIdx * 11).toString(16).padStart(6, '9')}`.slice(0, 7)
+    const contentHash = `a${(idx * 13 + skillIdx * 5).toString(16).padStart(7, 'b')}`.slice(0, 8)
+
+    return [
+      {
+        source: 'github',
+        label: 'Repository file evidence',
+        file: filePath,
+        commit: commitHash,
+        url: `https://github.com/${candidateSlug}/portfolio/blob/main/${filePath}`,
+        excerpt: excerptText,
+        excerptSource: 'sample',
+        matchedTerm: s.skill,
+        contentHash,
+        flagReason: null,
+        confidence: getConfidence({ source: 'github', credibility: cred, lineShare }),
+        fetchedAt,
+      },
+    ]
+  }
+
+  // 3. Supported
+  if (s.state === 'S') {
+    const cred = 0.44 + ((idx * 3 + skillIdx * 2) % 18) / 100
+    const lineShare = Math.round(cred * 100)
+    const commitHash = `7${(idx * 3 + skillIdx * 7).toString(16).padStart(6, 'e')}`.slice(0, 7)
+    const contentHash = `e${(idx * 9 + skillIdx * 4).toString(16).padStart(7, 'f')}`.slice(0, 8)
+
+    return [
+      {
+        source: 'github',
+        label: 'Repository file evidence',
+        file: filePath,
+        commit: commitHash,
+        url: `https://github.com/${candidateSlug}/portfolio/blob/main/${filePath}`,
+        excerpt: excerptText,
+        excerptSource: 'sample',
+        matchedTerm: s.skill,
+        contentHash,
+        flagReason: null,
+        confidence: getConfidence({ source: 'github', credibility: cred, lineShare }),
+        fetchedAt,
+      },
+    ]
+  }
+
+  // 4. Claimed with resume claim
+  const hasNoEvidence =
+    evText.toLowerCase().includes('no matching') ||
+    evText.toLowerCase().includes('no test') ||
+    evText.toLowerCase().includes('none')
+
+  if (s.state === 'C' && !hasNoEvidence) {
+    return [
+      {
+        source: 'resume',
+        label: 'From resume (a claim, not evidence)',
+        file: null,
+        commit: null,
+        url: null,
+        excerpt: `${cand.name}'s resume highlights production experience with ${s.skill} across enterprise applications.`,
+        excerptSource: 'sample',
+        matchedTerm: s.skill,
+        contentHash: null,
+        flagReason: null,
+        confidence: getConfidence({ source: 'resume' }),
+        fetchedAt,
+      },
+    ]
+  }
+
+  // No evidence found: return empty list (no confidence meter)
+  return []
+}
+
 /**
  * Generate all applicants for sample roles.
  * Returns exactly 47 applicants with deterministic IDs, passports and skills.
@@ -811,24 +951,36 @@ export function generateSampleApplicants() {
 
     if (cand.hasPassport) {
       const passportId = `PP-2026-${1000 + idx}`
+      const issuedAt = new Date(1730000000000 - (idx + 1) * 86400000 * 2).toISOString()
+
       applicant.passport = {
         id: passportId,
         candidate: cand.name,
         targetRole: applicant.targetRole,
-        issuedAt: new Date(1730000000000 - (idx + 1) * 86400000 * 2).toISOString(),
+        issuedAt,
         hash: `a1b2c3d4e5f6${idx}890abcdef1234567890abcdef1234567890abcdef1234567890abcdef`,
         revoked: false,
-        skills: cand.skills.map((s) => ({
-          skill: s.skill,
-          state: s.state,
-          level: s.level || 2,
-          evidence: s.evidence || 'Repository commit history verified',
-          rationale: s.why || 'Code verified in repository index.',
-          lineShare: s.state === 'V' ? 88 : s.state === 'S' ? 55 : 0,
-        })),
+        skills: cand.skills.map((s, skillIdx) => {
+          const evidenceDetails = buildSampleSkillEvidenceDetails(s, cand, applicant, idx, skillIdx, issuedAt)
+          return {
+            skill: s.skill,
+            state: s.state,
+            level: s.level || 2,
+            evidence: s.evidence || 'Repository commit history verified',
+            rationale: s.why || 'Code verified in repository index.',
+            lineShare: s.state === 'V' ? 88 : s.state === 'S' ? 55 : 0,
+            evidenceDetails,
+          }
+        }),
       }
     } else {
-      applicant.skills = cand.skills || []
+      applicant.skills = (cand.skills || []).map((s, skillIdx) => {
+        const evidenceDetails = buildSampleSkillEvidenceDetails(s, cand, applicant, idx, skillIdx, new Date().toISOString())
+        return {
+          ...s,
+          evidenceDetails,
+        }
+      })
     }
 
     applicants.push(applicant)

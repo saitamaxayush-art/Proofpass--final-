@@ -12,6 +12,8 @@ import { getRecommendedRoles } from '../api/recommendations.js'
 import { getLatestRoleKey, listRoadmaps } from '../api/roadmaps.js'
 import { imochaLink } from '../data/resources.js'
 import { L, WEIGHTS } from '../data.js'
+import { EvidenceCard } from './EvidenceCard.jsx'
+import { getSkillConfidence } from '../lib/confidence.js'
 
 export default function ApplicantDashboard() {
   const { user } = useAuth()
@@ -320,6 +322,9 @@ export default function ApplicantDashboard() {
                 <span className="seal-hash-display" title={passport.hash}>
                   SHA-256: {passport.hash}
                 </span>
+                <p style={{ fontSize: '0.76rem', color: 'var(--muted)', margin: '4px 0 0' }}>
+                  Excerpts and confidence are display details. The seal covers skill, state and evidence text.
+                </p>
               </div>
             </div>
 
@@ -506,25 +511,44 @@ export default function ApplicantDashboard() {
                 <tr>
                   <th>Skill</th>
                   <th>State</th>
+                  <th>Confidence</th>
                   <th>Level Rubric</th>
                   <th>Why This Status</th>
                   <th>Evidence Details</th>
                 </tr>
               </thead>
               <tbody>
-                {filteredSkills.map((item) => (
-                  <tr key={item.skill}>
-                    <td data-label="Skill">
-                      <strong>{item.skill}</strong>
-                    </td>
-                    <td data-label="State">
-                      <span className={`chip ${item.state}`}>{L[item.state]}</span>
-                    </td>
-                    <td data-label="Level">
-                      <span style={{ fontFamily: 'var(--mono)', fontSize: '0.8rem', color: 'var(--muted)' }}>
-                        Level {item.level || 2}
-                      </span>
-                    </td>
+                {filteredSkills.map((item) => {
+                  const hasAnyEvidenceDetails = (passport?.skills || []).some(
+                    (s) => Array.isArray(s.evidenceDetails)
+                  )
+                  const confInfo = getSkillConfidence(item, hasAnyEvidenceDetails)
+
+                  return (
+                    <tr key={item.skill}>
+                      <td data-label="Skill">
+                        <strong>{item.skill}</strong>
+                      </td>
+                      <td data-label="State">
+                        <span className={`chip ${item.state}`}>{L[item.state]}</span>
+                      </td>
+                      <td data-label="Confidence">
+                        {confInfo ? (
+                          <span
+                            className={`conf-badge ${confInfo.label ? confInfo.label.toLowerCase() : 'none'}`}
+                            title={confInfo.text}
+                          >
+                            {confInfo.text}
+                          </span>
+                        ) : (
+                          <span style={{ color: 'var(--muted)' }}>—</span>
+                        )}
+                      </td>
+                      <td data-label="Level">
+                        <span style={{ fontFamily: 'var(--mono)', fontSize: '0.8rem', color: 'var(--muted)' }}>
+                          Level {item.level || 2}
+                        </span>
+                      </td>
                     <td data-label="Rationale" style={{ maxWidth: '340px' }}>
                       <span style={{ fontSize: '0.82rem', color: 'var(--ink)' }}>
                         {item.rationale || 'State assigned via deterministic evidence inspection.'}
@@ -544,17 +568,25 @@ export default function ApplicantDashboard() {
                           {expandedEvidence[item.skill] ? 'Hide audit trace' : 'Inspect audit trace'}
                         </button>
                         {expandedEvidence[item.skill] && (
-                          <div className="evidence-expanded-box">
-                            <div>
-                              <strong>Source Signal:</strong>{' '}
-                              {item.lineShare > 0 ? `${item.lineShare}% author line share` : 'Resume mention only'}
-                            </div>
-                            <div style={{ marginTop: '4px' }}>
-                              <strong>State Weight:</strong> {WEIGHTS[item.state]} / 100
-                            </div>
-                            {item.state === 'S' && (
-                              <div style={{ marginTop: '4px', color: 'var(--accent)' }}>
-                                Ready for micro-check or external assessment to upgrade.
+                          <div style={{ marginTop: '8px' }}>
+                            {Array.isArray(item.evidenceDetails) && item.evidenceDetails.length > 0 ? (
+                              item.evidenceDetails.map((detail, idx) => (
+                                <EvidenceCard key={idx} detail={detail} />
+                              ))
+                            ) : (
+                              <div className="evidence-expanded-box">
+                                <div>
+                                  <strong>Source Signal:</strong>{' '}
+                                  {item.lineShare > 0 ? `${item.lineShare}% author line share` : 'Resume mention only'}
+                                </div>
+                                <div style={{ marginTop: '4px' }}>
+                                  <strong>State Weight:</strong> {WEIGHTS[item.state]} / 100
+                                </div>
+                                {item.state === 'S' && (
+                                  <div style={{ marginTop: '4px', color: 'var(--accent)' }}>
+                                    Ready for micro-check or external assessment to upgrade.
+                                  </div>
+                                )}
                               </div>
                             )}
                           </div>
@@ -562,7 +594,7 @@ export default function ApplicantDashboard() {
                       </div>
                     </td>
                   </tr>
-                ))}
+                )})}
               </tbody>
             </table>
           </div>

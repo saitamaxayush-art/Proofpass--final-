@@ -6,12 +6,15 @@ from __future__ import annotations
 
 import os
 from datetime import datetime
+from pathlib import Path
 from typing import Generator
 
 from sqlalchemy import Boolean, Column, DateTime, Float, Integer, String, Text, create_engine
 from sqlalchemy.orm import declarative_base, sessionmaker, Session
 
-DATABASE_URL = os.getenv("DATABASE_URL", "sqlite:///./proofpass.db")
+REPO_ROOT = Path(__file__).resolve().parent.parent
+DEFAULT_DB_PATH = REPO_ROOT / "proofpass.db"
+DATABASE_URL = os.getenv("DATABASE_URL", f"sqlite:///{DEFAULT_DB_PATH}")
 
 connect_args = {"check_same_thread": False} if DATABASE_URL.startswith("sqlite") else {}
 
@@ -65,3 +68,7 @@ def init_db(target_engine=None) -> None:
             conn.commit()
     except Exception:
         pass
+
+
+init_db()
+

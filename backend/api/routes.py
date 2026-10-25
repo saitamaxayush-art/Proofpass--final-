@@ -11,64 +11,35 @@ from fastapi import APIRouter, Depends, File, Form, HTTPException, Request, Uplo
 from sqlalchemy import text
 from sqlalchemy.orm import Session
 
-try:
-    from backend.database import PassportRecord, get_db
-    from backend.schemas import (
-        AnalyzeRequest,
-        AnalyzeResponse,
-        DeletePassportResponse,
-        HealthResponse,
-        IntegrityVerifyResponse,
-        PassportDetailResponse,
-        PublicQuizQuestion,
-        QuizEvaluationResponse,
-        QuizSubmissionRequest,
-    )
-    from backend.api.orchestrator import (
-        evaluate_quiz_submission,
-        run_analyze_pipeline,
-        verify_passport_integrity,
-        _seal_passport,
-    )
-    from backend.Intelligence.models import PassportPayload, QuizQuestion
-except ImportError:
-    from database import PassportRecord, get_db
-    from schemas import (
-        AnalyzeRequest,
-        AnalyzeResponse,
-        DeletePassportResponse,
-        HealthResponse,
-        IntegrityVerifyResponse,
-        PassportDetailResponse,
-        PublicQuizQuestion,
-        QuizEvaluationResponse,
-        QuizSubmissionRequest,
-    )
-    from api.orchestrator import (
-        evaluate_quiz_submission,
-        run_analyze_pipeline,
-        verify_passport_integrity,
-        _seal_passport,
-    )
-    from Intelligence.models import PassportPayload, QuizQuestion
-
-try:
-    from backend.api.auth import auth_router, get_current_session
-    from backend.verification.github_client import parse_github_url
-    from backend.schemas import canonical_json_dumps
-except ImportError:
-    from api.auth import auth_router, get_current_session
-    from verification.github_client import parse_github_url
-    from schemas import canonical_json_dumps
-
-try:
-    from backend.api.batch import batch_router
-except ImportError:
-    from api.batch import batch_router
+from backend.database import PassportRecord, get_db
+from backend.schemas import (
+    AnalyzeRequest,
+    AnalyzeResponse,
+    DeletePassportResponse,
+    HealthResponse,
+    IntegrityVerifyResponse,
+    PassportDetailResponse,
+    PublicQuizQuestion,
+    QuizEvaluationResponse,
+    QuizSubmissionRequest,
+    canonical_json_dumps,
+)
+from backend.api.orchestrator import (
+    evaluate_quiz_submission,
+    run_analyze_pipeline,
+    verify_passport_integrity,
+    _seal_passport,
+)
+from backend.intelligence.models import PassportPayload, QuizQuestion
+from backend.api.auth import auth_router, get_current_session
+from backend.verification.github_client import parse_github_url
+from backend.api.batch import batch_router
+from backend.api.resume import resume_router
 
 router = APIRouter(prefix="/api/v1", tags=["ProofPass Core"])
 router.include_router(auth_router)
 router.include_router(batch_router)
+router.include_router(resume_router)
 
 
 @router.get("/health", response_model=HealthResponse)

@@ -30,10 +30,14 @@ GITHUB_REDIRECT_URI = os.getenv(
     "GITHUB_REDIRECT_URI",
     "http://localhost:8000/api/v1/auth/github/callback",
 )
-SESSION_SECRET = os.getenv(
-    "SESSION_SECRET",
-    "proofpass_dev_fallback_secret_key_change_in_production",
-)
+
+_session_secret_env = os.getenv("SESSION_SECRET")
+if _session_secret_env and _session_secret_env.strip():
+    SESSION_SECRET = _session_secret_env.strip()
+else:
+    SESSION_SECRET = secrets.token_urlsafe(48)
+    logger.warning("SESSION_SECRET is unset. Generated a random session secret; sessions will reset on restart.")
+
 FRONTEND_ORIGIN = os.getenv("FRONTEND_ORIGIN", "http://localhost:5173").split(",")[0].strip()
 
 SESSION_COOKIE_NAME = "proofpass_session"
@@ -46,18 +50,24 @@ def _is_secure_cookie() -> bool:
     return FRONTEND_ORIGIN.startswith("https://") or os.getenv("COOKIE_SECURE", "false").lower() == "true"
 
 
-def _sign_data(data: str, secret: str = SESSION_SECRET) -> str:
+def _get_session_secret() -> str:
+    return os.getenv("SESSION_SECRET") or SESSION_SECRET
+
+
+def _sign_data(data: str, secret: Optional[str] = None) -> str:
     """Signs arbitrary string with HMAC-SHA256."""
-    sig = hmac.new(secret.encode("utf-8"), data.encode("utf-8"), hashlib.sha256).hexdigest()
+    s = secret or _get_session_secret()
+    sig = hmac.new(s.encode("utf-8"), data.encode("utf-8"), hashlib.sha256).hexdigest()
     return f"{data}.{sig}"
 
 
-def _verify_and_unpack(signed_data: str, secret: str = SESSION_SECRET) -> Optional[str]:
+def _verify_and_unpack(signed_data: str, secret: Optional[str] = None) -> Optional[str]:
     """Verifies HMAC-SHA256 signature and returns original string."""
     if not signed_data or "." not in signed_data:
         return None
     data, sig = signed_data.rsplit(".", 1)
-    expected = hmac.new(secret.encode("utf-8"), data.encode("utf-8"), hashlib.sha256).hexdigest()
+    s = secret or _get_session_secret()
+    expected = hmac.new(s.encode("utf-8"), data.encode("utf-8"), hashlib.sha256).hexdigest()
     if hmac.compare_digest(sig, expected):
         return data
     return None
@@ -68,6 +78,7 @@ def create_session_token(
     github_id: int,
     avatar_url: Optional[str] = None,
     expires_in: int = SESSION_DURATION_SECONDS,
+    secret: Optional[str] = None,
 ) -> str:
     """Creates a signed, time-limited session token."""
     payload = {
@@ -78,12 +89,12 @@ def create_session_token(
     }
     raw = json.dumps(payload, separators=(",", ":")).encode("utf-8")
     b64 = base64.urlsafe_b64encode(raw).decode("ascii")
-    return _sign_data(b64, SESSION_SECRET)
+    return _sign_data(b64, secret)
 
 
-def decode_session_token(token: str) -> Optional[dict]:
+def decode_session_token(token: str, secret: Optional[str] = None) -> Optional[dict]:
     """Decodes and validates signed session token, checking expiry."""
-    b64 = _verify_and_unpack(token, SESSION_SECRET)
+    b64 = _verify_and_unpack(token, secret)
     if not b64:
         return None
     try:
@@ -96,17 +107,17 @@ def decode_session_token(token: str) -> Optional[dict]:
         return None
 
 
-def create_state_token() -> Tuple[str, str]:
+def create_state_token(secret: Optional[str] = None) -> Tuple[str, str]:
     """Creates a random OAuth state and its signed cookie representation."""
     state = secrets.token_urlsafe(32)
     raw = f"{state}:{int(time.time())}"
-    signed = _sign_data(raw, SESSION_SECRET)
+    signed = _sign_data(raw, secret)
     return state, signed
 
 
-def verify_state_token(state: str, signed_cookie: str) -> bool:
+def verify_state_token(state: str, signed_cookie: str, secret: Optional[str] = None) -> bool:
     """Verifies that the state parameter matches the signed state cookie within TTL."""
-    raw = _verify_and_unpack(signed_cookie, SESSION_SECRET)
+    raw = _verify_and_unpack(signed_cookie, secret)
     if not raw or ":" not in raw:
         return False
     cookie_state, ts_str = raw.split(":", 1)
@@ -329,3 +340,17 @@ def auth_logout(response: Response):
     """Terminates active session and clears httpOnly session cookie."""
     response.delete_cookie(key=SESSION_COOKIE_NAME, path="/")
     return {"ok": True, "message": "Logged out successfully."}
+
+
+class AuthConfigResponse(BaseModel):
+    github_oauth_configured: bool
+
+
+@auth_router.get("/config", response_model=AuthConfigResponse)
+def auth_config():
+    """Returns whether GitHub OAuth is configured on this server. Never returns secrets."""
+    client_id = os.getenv("GITHUB_CLIENT_ID", GITHUB_CLIENT_ID)
+    client_secret = os.getenv("GITHUB_CLIENT_SECRET", GITHUB_CLIENT_SECRET)
+    configured = bool(client_id and client_id.strip() and client_secret and client_secret.strip())
+    return {"github_oauth_configured": configured}
+

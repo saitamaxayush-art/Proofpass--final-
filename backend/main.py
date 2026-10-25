@@ -3,51 +3,63 @@ ProofPass Backend Entry Point (FastAPI).
 """
 from __future__ import annotations
 
+import logging
 import os
+import sys
 from contextlib import asynccontextmanager
+from pathlib import Path
 
-from fastapi import FastAPI, Request, status
+# Load repo-root .env at the very top before any module reads env vars at import time
+REPO_ROOT = Path(__file__).resolve().parent.parent
+from dotenv import load_dotenv
+load_dotenv(REPO_ROOT / ".env")
+
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger("proofpass")
+
+from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import JSONResponse
 
-try:
-    from backend.api.routes import router as api_v1_router
-    from backend.database import init_db
-except ImportError:
-    from api.routes import router as api_v1_router
-    from database import init_db
+# Explicit absolute imports - no try/except hiding failures
+from backend.api.routes import router as api_v1_router
+from backend.database import init_db, DATABASE_URL
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    """Initializes SQLite tables on application startup."""
+    """Initializes database tables on application startup and logs environment details."""
     init_db()
+    resolved_db = DATABASE_URL
+    route_count = len(app.openapi().get("paths", {}))
+    logger.info("Resolved database URL/path: %s", resolved_db)
+    logger.info("Mounted %d routes", route_count)
     yield
 
 
 app = FastAPI(
     title="ProofPass API",
     description="Evidence-first Technical Credibility Passport Backend",
-    version="1.0.0",
+    version="2.0.0",
     lifespan=lifespan,
 )
 
 # ---------------------------------------------------------------------------
 # CORS Configuration
-# Configurable via CORS_ORIGINS environment variable.
-# Never combines wildcard origins with credentialed requests.
+# Uses CORS_ORIGINS, falling back to FRONTEND_ORIGIN, then localhost:5173 defaults.
+# allow_credentials stays True with explicit origins only.
 # ---------------------------------------------------------------------------
-cors_origins_env = os.getenv(
-    "CORS_ORIGINS",
-    "http://localhost:5173,http://localhost:3000,http://127.0.0.1:5173,http://localhost:8000",
-)
-origins = [o.strip() for o in cors_origins_env.split(",") if o.strip()]
-has_wildcard = "*" in origins
+cors_raw = os.getenv("CORS_ORIGINS")
+if not cors_raw or not cors_raw.strip():
+    cors_raw = os.getenv("FRONTEND_ORIGIN")
+if not cors_raw or not cors_raw.strip():
+    cors_raw = "http://localhost:5173,http://127.0.0.1:5173"
+
+origins = [o.strip() for o in cors_raw.split(",") if o.strip()]
 
 app.add_middleware(
     CORSMiddleware,
     allow_origins=origins,
-    allow_credentials=not has_wildcard,
+    allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
@@ -58,11 +70,20 @@ app.add_middleware(
 app.include_router(api_v1_router)
 
 
+@app.get("/api/health")
+def api_health():
+    return {
+        "status": "ok",
+        "service": "ProofPass Backend API",
+        "version": "2.0.0",
+    }
+
+
 @app.get("/")
 def root():
     return {
         "service": "ProofPass API",
-        "version": "1.0.0",
+        "version": "2.0.0",
         "endpoints": {
             "health": "/api/v1/health",
             "docs": "/docs",

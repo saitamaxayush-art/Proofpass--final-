@@ -19,13 +19,6 @@ from unittest.mock import AsyncMock, patch
 import pytest
 from fastapi.testclient import TestClient
 
-os.environ["GITHUB_CLIENT_ID"] = "test_client_id_123"
-os.environ["GITHUB_CLIENT_SECRET"] = "test_client_secret_456"
-os.environ["GITHUB_REDIRECT_URI"] = "http://localhost:8000/api/v1/auth/github/callback"
-os.environ["SESSION_SECRET"] = "test_session_secret_789"
-os.environ["FRONTEND_ORIGIN"] = "http://localhost:5173"
-os.environ["INTELLIGENCE_LLM_API_KEY"] = ""
-
 from backend.main import app
 from backend.api.auth import (
     STATE_COOKIE_NAME,
@@ -34,10 +27,31 @@ from backend.api.auth import (
     create_state_token,
 )
 
-client = TestClient(app)
+@pytest.fixture
+def client():
+    return TestClient(app)
 
 
-def test_oauth_start_redirects_with_state_cookie():
+@pytest.fixture(autouse=True)
+def setup_auth_env(monkeypatch):
+    monkeypatch.setenv("GITHUB_CLIENT_ID", "test_client_id_123")
+    monkeypatch.setenv("GITHUB_CLIENT_SECRET", "test_client_secret_456")
+    monkeypatch.setenv("GITHUB_REDIRECT_URI", "http://localhost:8000/api/v1/auth/github/callback")
+    monkeypatch.setenv("SESSION_SECRET", "test_session_secret_789")
+    monkeypatch.setenv("FRONTEND_ORIGIN", "http://localhost:5173")
+    monkeypatch.setenv("INTELLIGENCE_LLM_API_KEY", "")
+
+
+def test_auth_config_endpoint(client):
+    res = client.get("/api/v1/auth/config")
+    assert res.status_code == 200
+    data = res.json()
+    assert "github_oauth_configured" in data
+    assert data["github_oauth_configured"] is True
+
+
+
+def test_oauth_start_redirects_with_state_cookie(client):
     res = client.get("/api/v1/auth/github/start", follow_redirects=False)
     assert res.status_code == 302
     location = res.headers["location"]
@@ -48,7 +62,7 @@ def test_oauth_start_redirects_with_state_cookie():
     assert STATE_COOKIE_NAME in res.cookies
 
 
-def test_callback_state_mismatch_rejected():
+def test_callback_state_mismatch_rejected(client):
     # Provide mismatched state
     state, signed = create_state_token()
     client.cookies.set(STATE_COOKIE_NAME, signed)
@@ -61,7 +75,7 @@ def test_callback_state_mismatch_rejected():
     assert "auth_error=state_mismatch" in res.headers["location"]
 
 
-def test_callback_user_cancelled():
+def test_callback_user_cancelled(client):
     res = client.get(
         "/api/v1/auth/github/callback?error=access_denied&error_description=The+user+has+denied+your+application",
         follow_redirects=False,
@@ -70,7 +84,7 @@ def test_callback_user_cancelled():
     assert "auth_error=cancelled" in res.headers["location"]
 
 
-def test_callback_successful_exchange_and_token_never_in_logs_or_responses(caplog):
+def test_callback_successful_exchange_and_token_never_in_logs_or_responses(client, caplog):
     caplog.set_level(logging.DEBUG)
 
     state, signed = create_state_token()
@@ -111,7 +125,7 @@ def test_callback_successful_exchange_and_token_never_in_logs_or_responses(caplo
     assert secret_token not in caplog.text
 
 
-def test_auth_me_valid_session():
+def test_auth_me_valid_session(client):
     token = create_session_token(github_login="octocat", github_id=583231, avatar_url="https://example.com/a.png")
     client.cookies.set(SESSION_COOKIE_NAME, token)
 
@@ -123,7 +137,7 @@ def test_auth_me_valid_session():
     assert data["avatar_url"] == "https://example.com/a.png"
 
 
-def test_expired_session_rejected_by_auth_me_and_verify():
+def test_expired_session_rejected_by_auth_me_and_verify(client):
     # Session expired 60 seconds ago
     expired_token = create_session_token(github_login="octocat", github_id=583231, expires_in=-60)
     client.cookies.set(SESSION_COOKIE_NAME, expired_token)
@@ -145,7 +159,7 @@ def test_expired_session_rejected_by_auth_me_and_verify():
     assert "Authentication required" in res_verify.json()["detail"]
 
 
-def test_verify_without_session_returns_401():
+def test_verify_without_session_returns_401(client):
     client.cookies.clear()
     res = client.post(
         "/api/v1/verify",
@@ -159,7 +173,7 @@ def test_verify_without_session_returns_401():
     assert "Authentication required" in res.json()["detail"]
 
 
-def test_verify_rejects_repo_owned_by_someone_else():
+def test_verify_rejects_repo_owned_by_someone_else(client):
     token = create_session_token(github_login="alexrivera", github_id=987654)
     client.cookies.set(SESSION_COOKIE_NAME, token)
 
@@ -178,7 +192,7 @@ def test_verify_rejects_repo_owned_by_someone_else():
     assert "not owned by authenticated user @alexrivera" in detail
 
 
-def test_verify_ignores_spoofed_github_url_and_sets_ownership_and_id():
+def test_verify_ignores_spoofed_github_url_and_sets_ownership_and_id(client):
     token = create_session_token(github_login="alexrivera", github_id=987654)
     client.cookies.set(SESSION_COOKIE_NAME, token)
 
@@ -211,7 +225,7 @@ def test_verify_ignores_spoofed_github_url_and_sets_ownership_and_id():
     assert repo_ev_found
 
 
-def test_auth_logout_clears_session():
+def test_auth_logout_clears_session(client):
     token = create_session_token(github_login="octocat", github_id=583231)
     client.cookies.set(SESSION_COOKIE_NAME, token)
 
