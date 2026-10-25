@@ -1105,6 +1105,17 @@ textarea::placeholder {
   color: var(--ink);
 }
 
+.evidence-lineshare,
+.evidence-commits {
+  font-family: var(--mono);
+  font-size: 0.74rem;
+  background: rgba(37, 99, 235, 0.08);
+  border: 1px solid rgba(37, 99, 235, 0.2);
+  padding: 2px 6px;
+  border-radius: 4px;
+  color: var(--ink);
+}
+
 .evidence-conflict-alert {
   padding: 8px 10px;
   border-radius: 6px;
@@ -1113,6 +1124,22 @@ textarea::placeholder {
   font-size: 0.8rem;
   margin: 8px 0;
   line-height: 1.4;
+}
+
+.evidence-rationale-box {
+  padding: 8px 10px;
+  border-radius: 6px;
+  background: rgba(37, 99, 235, 0.06);
+  border: 1px solid rgba(37, 99, 235, 0.2);
+  font-size: 0.8rem;
+  margin: 8px 0;
+  line-height: 1.4;
+  color: var(--ink);
+}
+
+.evidence-audit-tr td {
+  border-top: none !important;
+  background: var(--surface-2, rgba(0, 0, 0, 0.02)) !important;
 }
 
 .evidence-excerpt-box {

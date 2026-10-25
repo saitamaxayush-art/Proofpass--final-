@@ -33,7 +33,7 @@ import { buildRoadmapsForGaps } from '../lib/roadmap.js'
 import { saveRoadmapsFromVerification, updateRoadmapStep } from '../api/roadmaps.js'
 import { getGitHubSession, logoutGitHubSession, getAuthConfig } from '../api/auth.js'
 import { CodingProfilesField } from './CodingProfilesField.jsx'
-import { attachEvidenceDetailsToPassport } from '../lib/evidenceDetails.js'
+import { attachEvidenceDetailsToPassport, buildSkillEvidenceDetails } from '../lib/evidenceDetails.js'
 import { EvidenceCard } from './EvidenceCard.jsx'
 
 const STEP_DEFINITIONS = [
@@ -320,6 +320,15 @@ export default function Verify() {
 
   const toggleResultSkillExpand = (skillName) => {
     setExpandedResultSkills((prev) => ({
+      ...prev,
+      [skillName]: !prev[skillName],
+    }))
+  }
+
+  // Step 5 Evidence verification expansion state
+  const [expandedStep5Skills, setExpandedStep5Skills] = useState({})
+  const toggleStep5SkillExpand = (skillName) => {
+    setExpandedStep5Skills((prev) => ({
       ...prev,
       [skillName]: !prev[skillName],
     }))
@@ -1440,16 +1449,80 @@ export default function Verify() {
                         <th>Skill</th>
                         <th>Assigned State</th>
                         <th>Evidence and Rationale</th>
+                        <th>Audit Evidence</th>
                       </tr>
                     </thead>
                     <tbody>
-                      {statesData?.skillStates.map((s) => (
-                        <tr key={s.skill}>
-                          <td><strong>{s.skill}</strong></td>
-                          <td><span className={`chip ${s.state}`}>{s.state === 'V' ? 'VERIFIED' : s.state === 'S' ? 'SUPPORTED' : s.state === 'C' ? 'CLAIMED' : 'CONTRADICTED'}</span></td>
-                          <td>{s.rationale}</td>
-                        </tr>
-                      ))}
+                      {statesData?.skillStates.map((s) => {
+                        const isExpanded = !!expandedStep5Skills[s.skill]
+                        const details = buildSkillEvidenceDetails(s, {
+                          readData,
+                          evidenceData,
+                          authorshipData,
+                          statesData,
+                          intakeData,
+                        })
+
+                        return (
+                          <Fragment key={s.skill}>
+                            <tr>
+                              <td><strong>{s.skill}</strong></td>
+                              <td>
+                                <span className={`chip ${s.state}`}>
+                                  {s.state === 'V'
+                                    ? 'VERIFIED'
+                                    : s.state === 'S'
+                                      ? 'SUPPORTED'
+                                      : s.state === 'C'
+                                        ? 'CLAIMED'
+                                        : 'CONTRADICTED'}
+                                </span>
+                              </td>
+                              <td>
+                                <div style={{ fontSize: '0.86rem' }}>
+                                  <div>{s.rationale}</div>
+                                  {s.evidence && (
+                                    <div style={{ fontSize: '0.78rem', color: 'var(--muted)', marginTop: '4px' }}>
+                                      {s.evidence}
+                                    </div>
+                                  )}
+                                </div>
+                              </td>
+                              <td>
+                                <button
+                                  type="button"
+                                  className="evidence-expand-btn"
+                                  onClick={() => toggleStep5SkillExpand(s.skill)}
+                                  aria-expanded={isExpanded}
+                                  title={isExpanded ? 'Hide evidence' : 'Show evidence'}
+                                >
+                                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                                    <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
+                                    <polyline points="14 2 14 8 20 8" />
+                                    <line x1="16" y1="13" x2="8" y2="13" />
+                                    <line x1="16" y1="17" x2="8" y2="17" />
+                                  </svg>
+                                  <span>{isExpanded ? 'Hide evidence' : 'Show evidence'}</span>
+                                  <span className="expand-chevron" aria-hidden="true">
+                                    {isExpanded ? '▴' : '▾'}
+                                  </span>
+                                </button>
+                              </td>
+                            </tr>
+                            {isExpanded && (
+                              <tr className="evidence-audit-tr">
+                                <td colSpan="4" style={{ padding: '12px 14px', background: 'var(--bg-subtle, rgba(0,0,0,0.02))' }}>
+                                  <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+                                    {details.map((detail, idx) => (
+                                      <EvidenceCard key={idx} detail={detail} evidence={detail} />
+                                    ))}
+                                  </div>
+                                </td>
+                              </tr>
+                            )}
+                          </Fragment>
+                        )
+                      })}
                     </tbody>
                   </table>
                 </div>
@@ -1839,34 +1912,52 @@ export default function Verify() {
                         <tbody>
                           {passportData.passport.skills.map((s) => {
                             const isExpanded = !!expandedResultSkills[s.skill]
-                            const hasDetails = Array.isArray(s.evidenceDetails) && s.evidenceDetails.length > 0
+                            const details =
+                              Array.isArray(s.evidenceDetails) && s.evidenceDetails.length > 0
+                                ? s.evidenceDetails
+                                : buildSkillEvidenceDetails(s, {
+                                    readData,
+                                    evidenceData,
+                                    authorshipData,
+                                    statesData,
+                                    intakeData,
+                                    passport: passportData.passport,
+                                  })
+
                             return (
                               <Fragment key={s.skill}>
                                 <tr>
                                   <td>
                                     <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
                                       <strong>{s.skill}</strong>
-                                      {hasDetails && (
-                                        <button
-                                          type="button"
-                                          className="evidence-expand-btn"
-                                          onClick={() => toggleResultSkillExpand(s.skill)}
-                                          aria-expanded={isExpanded}
-                                          title={isExpanded ? 'Collapse evidence audit' : 'Expand evidence audit'}
-                                        >
-                                          {isExpanded ? 'Hide audit ▲' : 'View audit ▼'}
-                                        </button>
-                                      )}
+                                      <button
+                                        type="button"
+                                        className="evidence-expand-btn"
+                                        onClick={() => toggleResultSkillExpand(s.skill)}
+                                        aria-expanded={isExpanded}
+                                        title={isExpanded ? 'Hide evidence' : 'Show evidence'}
+                                      >
+                                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                                          <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
+                                          <polyline points="14 2 14 8 20 8" />
+                                          <line x1="16" y1="13" x2="8" y2="13" />
+                                          <line x1="16" y1="17" x2="8" y2="17" />
+                                        </svg>
+                                        <span>{isExpanded ? 'Hide evidence' : 'Show evidence'}</span>
+                                        <span className="expand-chevron" aria-hidden="true">
+                                          {isExpanded ? '▴' : '▾'}
+                                        </span>
+                                      </button>
                                     </div>
                                   </td>
                                   <td><span className={`chip ${s.state}`}>{s.state === 'V' ? 'VERIFIED' : s.state === 'S' ? 'SUPPORTED' : s.state === 'C' ? 'CLAIMED' : 'CONTRADICTED'}</span></td>
                                   <td>{s.evidence}</td>
                                 </tr>
-                                {isExpanded && hasDetails && (
+                                {isExpanded && (
                                   <tr className="evidence-audit-tr">
                                     <td colSpan="3" style={{ padding: '12px 14px', background: 'var(--bg-subtle, rgba(0,0,0,0.02))' }}>
                                       <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
-                                        {s.evidenceDetails.map((detail, idx) => (
+                                        {details.map((detail, idx) => (
                                           <EvidenceCard key={idx} detail={detail} evidence={detail} skillName={s.skill} />
                                         ))}
                                       </div>

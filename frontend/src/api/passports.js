@@ -4,6 +4,7 @@
  */
 
 import { verifyPassportIntegrity } from '../engine/step8_issue_passport.js'
+import { attachEvidenceDetailsToPassport } from '../lib/evidenceDetails.js'
 
 const STORAGE_PASSPORTS_KEY = 'pp_prototype_passports'
 
@@ -40,11 +41,11 @@ function normalizePassport(p) {
       level: s.level || 2,
       evidence: s.evidence || (s.evidence_chain?.[0]?.detail) || 'Verified evidence',
       rationale: s.rationale || s.why || '',
-      evidenceDetails: s.evidenceDetails || [],
+      evidenceDetails: Array.isArray(s.evidenceDetails) && s.evidenceDetails.length > 0 ? s.evidenceDetails : [],
     }))
   }
 
-  return {
+  const base = {
     ...p,
     id,
     passport_id: id,
@@ -55,6 +56,8 @@ function normalizePassport(p) {
     skills,
     revoked: Boolean(p.revoked),
   }
+
+  return attachEvidenceDetailsToPassport(base, { passport: base })
 }
 
 /**

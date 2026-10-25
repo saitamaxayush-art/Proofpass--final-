@@ -190,7 +190,7 @@ export default function CandidateDrawer({
                               className="sp-evidence-link"
                               onClick={onClose}
                             >
-                              Evidence →
+                              Show evidence →
                             </Link>
                           </div>
                         )}

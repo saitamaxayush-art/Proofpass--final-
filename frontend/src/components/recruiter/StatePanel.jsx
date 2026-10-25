@@ -84,7 +84,7 @@ export default function StatePanel({
               to={`/passport/${candidate.passport.id}#${skill.passportAnchor}`}
               className="sp-evidence-link"
             >
-              View evidence →
+              Show evidence →
             </Link>
           )}
         </div>

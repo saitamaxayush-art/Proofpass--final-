@@ -71,7 +71,7 @@ export function EvidenceCard({ detail, evidence }) {
       </div>
 
       {/* File & Commit metadata */}
-      {(d.file || d.commit || d.contentHash) && (
+      {(d.file || d.commit || d.contentHash || d.authorLineShare != null || d.commitCount != null) && (
         <div className="evidence-meta-row">
           {d.file && (
             <span className="evidence-filepath" title={d.file}>
@@ -88,6 +88,16 @@ export function EvidenceCard({ detail, evidence }) {
               sha256:{String(d.contentHash).slice(0, 8)}
             </code>
           )}
+          {d.authorLineShare != null && (
+            <span className="evidence-lineshare" title="Author Line Share">
+              Author share: <strong>{d.authorLineShare}%</strong>
+            </span>
+          )}
+          {d.commitCount != null && d.commitCount > 0 && (
+            <span className="evidence-commits" title="Original Commits">
+              Commits: <strong>{d.commitCount}</strong>
+            </span>
+          )}
         </div>
       )}
 
@@ -96,6 +106,14 @@ export function EvidenceCard({ detail, evidence }) {
         <div className="evidence-conflict-alert" role="alert">
           <strong style={{ color: 'var(--st-x)' }}>Why it conflicts:</strong>{' '}
           <span>{d.flagReason}</span>
+        </div>
+      )}
+
+      {/* Judgment Rationale (when not in conflict) */}
+      {!d.flagReason && d.rationale && (
+        <div className="evidence-rationale-box">
+          <strong style={{ color: 'var(--accent, #3b82f6)' }}>Judgment rationale:</strong>{' '}
+          <span>{d.rationale}</span>
         </div>
       )}
 
