@@ -1441,11 +1441,11 @@
 }
 
 .leaderboard-item:hover {
-  background: rgba(181, 70, 16, 0.015);
+  background: var(--surface-2);
 }
 
 .leaderboard-item.has-open-panel {
-  background: rgba(181, 70, 16, 0.02);
+  background: var(--surface-2);
 }
 
 .lb-cell {

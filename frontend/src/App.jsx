@@ -464,28 +464,12 @@ function AppShell() {
               </>
             ) : (
               <>
-                <div
-                  className="header-user-tag"
-                  style={{
-                    display: 'inline-flex',
-                    alignItems: 'center',
-                    gap: '8px',
-                    fontSize: '0.85rem',
-                  }}
-                >
-                  <span
-                    className="header-user-name"
-                    style={{
-                      fontWeight: 500,
-                      maxWidth: '140px',
-                      overflow: 'hidden',
-                      textOverflow: 'ellipsis',
-                      whiteSpace: 'nowrap',
-                    }}
-                    title={user.name}
-                  >
-                    {user.name}
-                  </span>
+                <div className="header-user-tag">
+                  {user.name && user.name.toLowerCase() !== user.role.toLowerCase() && (
+                    <span className="header-user-name" title={user.name}>
+                      {user.name}
+                    </span>
+                  )}
                   <span className={`chip sm ${user.role === 'recruiter' ? 'C' : 'V'}`}>
                     {user.role}
                   </span>

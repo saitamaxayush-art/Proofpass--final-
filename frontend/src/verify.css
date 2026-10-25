@@ -394,11 +394,9 @@
 /* Glass Card and cursor spotlight */
 .glass {
   position: relative;
-  background: color-mix(in srgb, var(--surface) 45%, transparent) !important;
-  -webkit-backdrop-filter: blur(20px) saturate(1.35);
-  backdrop-filter: blur(20px) saturate(1.35);
-  border: 1px solid color-mix(in srgb, var(--ink) 12%, transparent) !important;
-  box-shadow: 0 10px 32px -12px rgba(0, 0, 0, 0.08) !important;
+  background: var(--surface) !important;
+  border: 1px solid var(--line) !important;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.16) !important;
   overflow: hidden;
 }
 
@@ -440,7 +438,7 @@
   z-index: 2;
 }
 
-/* Translucent inner boxes */
+/* Clearly defined inner boxes */
 .glass .preset-bar,
 .glass .form-input,
 .glass textarea,
@@ -458,10 +456,9 @@
 .glass .result-stat-card,
 .glass .tab-nav,
 .glass .chatbot-window {
-  background: color-mix(in srgb, var(--surface-2) 35%, transparent) !important;
-  -webkit-backdrop-filter: blur(10px);
-  backdrop-filter: blur(10px);
-  border-color: color-mix(in srgb, var(--ink) 10%, transparent);
+  background: var(--surface-2) !important;
+  border: 1px solid var(--line) !important;
+  color: var(--ink);
 }
 
 /* VerifyBackground */

@@ -13,8 +13,8 @@
   --ink: #1d1a17;
   --muted: #5c554b;
   --faint: #857c6e;
-  --line: rgba(29, 26, 23, 0.13);
-  --line-soft: rgba(29, 26, 23, 0.07);
+  --line: rgba(29, 26, 23, 0.20);
+  --line-soft: rgba(29, 26, 23, 0.12);
   --accent: #b54610;
   --accent-hover: #963908;
   --on-accent: #fff8ee;
@@ -22,7 +22,7 @@
   --panel: #1d1a17;
   --panel-ink: #f3ecdf;
   --panel-muted: #a99f91;
-  --panel-line: rgba(243, 236, 223, 0.14);
+  --panel-line: rgba(243, 236, 223, 0.18);
   --st-v: #2a7550;
   --st-s: #b54610;
   --st-c: #6b6457;
@@ -33,7 +33,7 @@
   --lock-body: #1d1a17;
   --lock-hole: #0e0d0b;
   --shadow: 0 1px 0 rgba(29, 26, 23, 0.04), 0 18px 40px -22px rgba(29, 26, 23, 0.22);
-  --header-bg: rgba(246, 241, 231, 0.82);
+  --header-bg: rgba(246, 241, 231, 0.88);
 }
 
 :root[data-theme='dark'] {
@@ -42,18 +42,18 @@
   --surface: #1e1b18;
   --surface-2: #27231f;
   --ink: #f3ecdf;
-  --muted: #a99f91;
-  --faint: #7f7669;
-  --line: rgba(243, 236, 223, 0.13);
-  --line-soft: rgba(243, 236, 223, 0.07);
+  --muted: #b8aea1;
+  --faint: #8e8578;
+  --line: rgba(243, 236, 223, 0.24);
+  --line-soft: rgba(243, 236, 223, 0.15);
   --accent: #e8803f;
   --accent-hover: #f09457;
   --on-accent: #1a0f08;
   --accent-tint: rgba(232, 128, 63, 0.14);
   --panel: #0e0d0b;
   --panel-ink: #f3ecdf;
-  --panel-muted: #a99f91;
-  --panel-line: rgba(243, 236, 223, 0.12);
+  --panel-muted: #b8aea1;
+  --panel-line: rgba(243, 236, 223, 0.18);
   --st-v: #62c492;
   --st-s: #e8803f;
   --st-c: #9a9183;
@@ -63,8 +63,8 @@
   --steel-lo: #262c33;
   --lock-body: #141210;
   --lock-hole: #050505;
-  --shadow: 0 0 0 1px rgba(255, 255, 255, 0.02), 0 24px 44px -26px rgba(0, 0, 0, 0.75);
-  --header-bg: rgba(21, 19, 17, 0.8);
+  --shadow: 0 0 0 1px rgba(255, 255, 255, 0.05), 0 24px 44px -26px rgba(0, 0, 0, 0.75);
+  --header-bg: rgba(21, 19, 17, 0.88);
 }
 
 @media (prefers-color-scheme: dark) {
@@ -74,10 +74,10 @@
     --surface: #1e1b18;
     --surface-2: #27231f;
     --ink: #f3ecdf;
-    --muted: #a99f91;
-    --faint: #7f7669;
-    --line: rgba(243, 236, 223, 0.13);
-    --line-soft: rgba(243, 236, 223, 0.07);
+    --muted: #b8aea1;
+    --faint: #8e8578;
+    --line: rgba(243, 236, 223, 0.24);
+    --line-soft: rgba(243, 236, 223, 0.15);
     --accent: #e8803f;
     --accent-hover: #f09457;
     --on-accent: #1a0f08;
@@ -348,35 +348,43 @@ p { color: var(--muted); }
 .site-nav {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 6px;
   flex: 1 1 auto;
   justify-content: flex-start;
   white-space: nowrap;
 }
 .site-nav a {
   position: relative;
-  padding: 8px 12px;
-  font-size: 0.92rem;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 7px 14px;
+  font-size: 0.90rem;
   font-weight: 500;
-  color: var(--muted);
+  color: var(--ink);
+  opacity: 0.85;
   text-decoration: none;
   white-space: nowrap;
-  transition: color 0.3s ease;
+  border-radius: 8px;
+  border: 1px solid transparent;
+  transition: all 0.2s var(--ease);
 }
-.site-nav a::after {
-  content: '';
-  position: absolute;
-  left: 12px;
-  right: 12px;
-  bottom: 3px;
-  height: 1.5px;
-  background: var(--accent);
-  transform: scaleX(0);
-  transform-origin: right;
-  transition: transform 0.5s var(--ease);
+.site-nav a:hover {
+  opacity: 1;
+  color: var(--ink);
+  background: var(--surface-2);
+  border-color: var(--line);
 }
-.site-nav a:hover, .site-nav a[aria-current] { color: var(--ink); }
-.site-nav a:hover::after, .site-nav a[aria-current]::after { transform: scaleX(1); transform-origin: left; }
+.site-nav a[aria-current],
+.site-nav a[aria-current='page'],
+.site-nav a[aria-current='true'] {
+  opacity: 1;
+  color: var(--accent);
+  background: var(--surface);
+  border-color: var(--line);
+  font-weight: 600;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08);
+}
 
 .bar-actions {
   display: flex;
@@ -384,6 +392,26 @@ p { color: var(--muted); }
   gap: 10px;
   margin-left: auto;
   flex-shrink: 0;
+}
+
+.header-user-tag {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 0.84rem;
+  padding: 5px 12px;
+  border-radius: 8px;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
+}
+.header-user-name {
+  font-weight: 600;
+  color: var(--ink);
+  max-width: 140px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .icon-btn {
@@ -913,6 +941,75 @@ p { color: var(--muted); }
 .input-error {
   border-color: var(--st-x) !important;
 }
+
+/* =========================================================
+   Universal Form Controls & Text Box Section Styles
+   Well-defined borders, high contrast, clean paddings, and focus rings
+   ========================================================= */
+
+.form-input,
+.form-textarea,
+.input-field,
+.textarea-field,
+input[type="text"],
+input[type="email"],
+input[type="password"],
+input[type="search"],
+textarea,
+select {
+  width: 100%;
+  font: 400 0.95rem/1.5 var(--font);
+  color: var(--ink);
+  padding: 10px 14px;
+  border-radius: 9px;
+  border: 1px solid var(--line);
+  background: var(--surface);
+  box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.04);
+  transition: border-color 0.2s ease, box-shadow 0.2s ease, background 0.2s ease;
+}
+
+.form-input:hover,
+.form-textarea:hover,
+input[type="text"]:hover,
+input[type="email"]:hover,
+input[type="password"]:hover,
+input[type="search"]:hover,
+textarea:hover,
+select:hover {
+  border-color: var(--faint);
+}
+
+.form-input:focus,
+.form-textarea:focus,
+input[type="text"]:focus,
+input[type="email"]:focus,
+input[type="password"]:focus,
+input[type="search"]:focus,
+textarea:focus,
+select:focus {
+  outline: none;
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px var(--accent-tint), inset 0 1px 2px rgba(0, 0, 0, 0.04);
+  background: var(--surface);
+}
+
+.form-input::placeholder,
+.form-textarea::placeholder,
+input::placeholder,
+textarea::placeholder {
+  color: var(--faint);
+  opacity: 0.85;
+}
+
+.table-card,
+.dash-card,
+.login-card,
+.overview-card {
+  border: 1px solid var(--line);
+  background: var(--surface);
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.08);
+}
+
 .login-actions {
   margin-top: 6px;
 }
